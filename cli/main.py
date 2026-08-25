@@ -1,11 +1,13 @@
 import datetime
 import os
+import re
 import sys
 import time
 from collections import deque
 from functools import wraps
 from pathlib import Path
 
+import questionary
 import typer
 from rich import box
 from rich.align import Align
@@ -33,6 +35,8 @@ from cli.utils import (
     detect_asset_type,
     ensure_api_key,
     get_ticker,
+    is_valid_ticker_input,
+    normalize_ticker_symbol,
     prompt_openai_compatible_url,
     resolve_backend_url,
     select_analysts,
@@ -49,6 +53,7 @@ from tradingagents.graph.analyst_execution import (
     sync_analyst_tracker_from_chunk,
 )
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.paper_trading import PaperPortfolio, fetch_execution_price
 from tradingagents.reporting import write_report_tree
 
 console = Console()
@@ -492,7 +497,7 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
-def get_user_selections():
+def get_user_selections(selected_ticker: str | None = None):
     """Get all user selections before starting the analysis display."""
     # Display ASCII art welcome message
     with open(Path(__file__).parent / "static" / "welcome.txt", encoding="utf-8") as f:
@@ -503,9 +508,6 @@ def get_user_selections():
     welcome_content += "[bold green]TradingAgents: Multi-Agents LLM Financial Trading Framework - CLI[/bold green]\n\n"
     welcome_content += "[bold]Workflow Steps:[/bold]\n"
     welcome_content += "I. Analyst Team → II. Research Team → III. Trader → IV. Risk Management → V. Portfolio Management\n\n"
-    welcome_content += (
-        "[dim]Built by [Tauric Research](https://github.com/TauricResearch)[/dim]"
-    )
 
     # Create and center the welcome box
     welcome_box = Panel(
@@ -545,15 +547,25 @@ def get_user_selections():
         console.print(create_question_box(box_title, box_body))
         return prompt_fn()
 
-    # Step 1: Ticker symbol
-    console.print(
-        create_question_box(
-            "Step 1: Ticker Symbol",
-            "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
-            "SPY",
+    # Step 1: Ticker symbol. Paper mode supplies the first watchlist symbol so
+    # provider/model/analyst settings are collected only once for the batch.
+    if selected_ticker is None:
+        console.print(
+            create_question_box(
+                "Step 1: Ticker Symbol",
+                "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
+                "SPY",
+            )
         )
-    )
-    selected_ticker = get_ticker()
+        selected_ticker = get_ticker()
+    else:
+        console.print(
+            create_question_box(
+                "Step 1: Paper Trading Watchlist",
+                "The watchlist is configured; choose shared analysis settings for the batch",
+                selected_ticker,
+            )
+        )
     asset_type = detect_asset_type(selected_ticker)
     # Only announce when it's not the default stock path, to avoid printing
     # "stock" on every run.
@@ -763,6 +775,53 @@ def get_analysis_date():
 def save_report_to_disk(final_state, ticker: str, save_path: Path):
     """Save the complete analysis report to disk (shared CLI/API writer)."""
     return write_report_tree(final_state, ticker, save_path)
+
+
+def execute_paper_trade(final_state, ticker: str, trade_date: str, config: dict):
+    """Turn the final decision into one local virtual trade."""
+    decision = final_state.get("final_trade_decision") or final_state.get(
+        "risk_debate_state", {}
+    ).get("judge_decision", "")
+    if not decision:
+        raise ValueError("The analysis did not produce a final portfolio decision")
+
+    price = fetch_execution_price(ticker, trade_date)
+    portfolio = PaperPortfolio(
+        config["paper_db_path"],
+        initial_cash=config["paper_initial_cash"],
+        max_position_pct=config["paper_max_position_pct"],
+    )
+    result = portfolio.apply_decision(
+        symbol=ticker,
+        trade_date=trade_date,
+        decision_text=decision,
+        price=price,
+    )
+    return portfolio, result
+
+
+def display_paper_portfolio(portfolio: PaperPortfolio, result) -> None:
+    """Display the latest virtual trade and account state."""
+    snapshot = portfolio.snapshot()
+    duplicate = " (already processed)" if result.duplicate else ""
+    console.print(
+        f"\n[bold cyan]Paper trading:[/bold cyan] {result.decision} → "
+        f"{result.side}{duplicate} at ${result.price:,.2f}"
+    )
+    console.print(f"[dim]{result.message}[/dim]")
+
+    table = Table(title="Virtual portfolio", box=box.SIMPLE_HEAVY)
+    table.add_column("Cash", justify="right")
+    table.add_column("Positions", justify="right")
+    table.add_column("Total", justify="right")
+    table.add_column("Return", justify="right")
+    table.add_row(
+        f"${snapshot.cash:,.2f}",
+        f"${snapshot.market_value:,.2f}",
+        f"${snapshot.total_equity:,.2f}",
+        f"{snapshot.total_return:+.2%}",
+    )
+    console.print(table)
 
 
 def display_complete_report(final_state):
@@ -1001,11 +1060,19 @@ def _build_run_config(selections: dict, checkpoint: bool | None) -> dict:
     return config
 
 
-def run_analysis(checkpoint: bool | None = None):
-    # First get all user selections
-    selections = get_user_selections()
-
+def _run_selected_analysis(
+    selections: dict,
+    checkpoint: bool | None = None,
+    *,
+    paper_trading: bool = False,
+    prompt_for_report: bool = True,
+):
+    global message_buffer
+    # Each batch item gets a fresh buffer; otherwise the logging decorators from
+    # a previous ticker would remain wrapped and write into the wrong report.
+    message_buffer = MessageBuffer()
     config = _build_run_config(selections, checkpoint)
+    config["paper_trading_enabled"] = paper_trading
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()
@@ -1267,10 +1334,162 @@ def run_analysis(checkpoint: bool | None = None):
     except Exception as e:
         console.print(f"[red]Error saving report: {e}[/red]")
 
+    if config.get("paper_trading_enabled", False):
+        try:
+            portfolio, trade_result = execute_paper_trade(
+                final_state,
+                selections["ticker"],
+                selections["analysis_date"],
+                config,
+            )
+            portfolio.write_snapshot(save_path / "paper_portfolio.json")
+            display_paper_portfolio(portfolio, trade_result)
+        except Exception as e:
+            console.print(f"[red]Paper trade could not be processed: {e}[/red]")
+
     # Prompt to display full report
-    display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
-    if display_choice in ("Y", "YES", ""):
-        display_complete_report(final_state)
+    if prompt_for_report:
+        display_choice = typer.prompt(
+            "\nDisplay full report on screen?", default="Y"
+        ).strip().upper()
+        if display_choice in ("Y", "YES", ""):
+            display_complete_report(final_state)
+
+
+def select_workflow_mode() -> str:
+    """Choose between the original single analysis and watchlist paper trading."""
+    choice = questionary.select(
+        "Choose how TradingAgents should run:",
+        choices=[
+            questionary.Choice(
+                "Single analysis — analyze one ticker without virtual trading",
+                value="analysis",
+            ),
+            questionary.Choice(
+                "Paper trading — analyze a watchlist and trade the virtual portfolio",
+                value="paper_trading",
+            ),
+        ],
+        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        style=questionary.Style(
+            [
+                ("selected", "fg:green noinherit"),
+                ("highlighted", "fg:green noinherit"),
+                ("pointer", "fg:green noinherit"),
+            ]
+        ),
+    ).ask()
+    if choice is None:
+        console.print("\n[red]No workflow selected. Exiting...[/red]")
+        raise typer.Exit(code=1)
+    return choice
+
+
+def parse_watchlist(raw: str) -> list[str]:
+    """Normalize a comma/space/newline-separated ticker watchlist."""
+    tokens = [token for token in re.split(r"[,\s]+", raw.strip()) if token]
+    if not tokens:
+        raise ValueError("Enter at least one ticker symbol.")
+
+    invalid = [token for token in tokens if not is_valid_ticker_input(token)]
+    if invalid:
+        raise ValueError(f"Invalid ticker symbol(s): {', '.join(invalid)}")
+
+    # Preserve the user's order while preventing duplicate analyses/orders.
+    tickers = []
+    seen = set()
+    for token in tokens:
+        ticker = normalize_ticker_symbol(token)
+        if ticker not in seen:
+            tickers.append(ticker)
+            seen.add(ticker)
+    return tickers
+
+
+def get_paper_watchlist() -> list[str]:
+    """Prompt for any number of symbols to process as one paper-trading batch."""
+    raw = questionary.text(
+        "Enter paper-trading tickers, separated by commas:",
+        instruction="Example: AAPL, MSFT, NVDA, AMZN, META",
+        validate=lambda value: _watchlist_error(value) or True,
+        style=questionary.Style(
+            [("text", "fg:green"), ("highlighted", "noinherit")]
+        ),
+    ).ask()
+    if raw is None:
+        console.print("\n[red]No watchlist provided. Exiting...[/red]")
+        raise typer.Exit(code=1)
+    return parse_watchlist(raw)
+
+
+def _watchlist_error(raw: str) -> str | None:
+    try:
+        parse_watchlist(raw)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def run_analysis(checkpoint: bool | None = None):
+    """Dispatch the explicitly selected CLI workflow."""
+    workflow = select_workflow_mode()
+    if workflow == "analysis":
+        selections = get_user_selections()
+        _run_selected_analysis(
+            selections,
+            checkpoint=checkpoint,
+            paper_trading=False,
+            prompt_for_report=True,
+        )
+        return
+
+    tickers = get_paper_watchlist()
+    shared_selections = get_user_selections(selected_ticker=tickers[0])
+    console.print(
+        f"\n[bold cyan]Paper trading batch:[/bold cyan] "
+        f"{len(tickers)} ticker(s) using one shared virtual portfolio."
+    )
+
+    failures = []
+    for index, ticker in enumerate(tickers, start=1):
+        selections = dict(shared_selections)
+        asset_type = detect_asset_type(ticker)
+        selections["ticker"] = ticker
+        selections["asset_type"] = asset_type.value
+        if asset_type.value == "crypto":
+            selections["analysts"] = [
+                analyst
+                for analyst in shared_selections["analysts"]
+                if analyst.value != "fundamentals"
+            ]
+
+        console.print(
+            Rule(
+                f"Paper Trading {index}/{len(tickers)} — {ticker}",
+                style="bold cyan",
+            )
+        )
+        try:
+            _run_selected_analysis(
+                selections,
+                checkpoint=checkpoint,
+                paper_trading=True,
+                prompt_for_report=False,
+            )
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            failures.append((ticker, str(exc)))
+            console.print(f"[red]Analysis failed for {ticker}: {exc}[/red]")
+
+    completed = len(tickers) - len(failures)
+    console.print(
+        f"\n[bold green]Paper trading batch complete:[/bold green] "
+        f"{completed}/{len(tickers)} ticker(s) processed."
+    )
+    if failures:
+        for ticker, error in failures:
+            console.print(f"[red]• {ticker}: {error}[/red]")
 
 
 @app.command()

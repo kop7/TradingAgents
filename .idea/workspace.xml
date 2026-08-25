@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="2fc3bcf2-04e5-4f40-a39b-a7d431e5cf32" name="Changes" comment="add AGENTS.md">
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/db/portfolio.sqlite" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/test_paper_trading.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tradingagents/paper_trading.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cli/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/cli/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cli/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/cli/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tradingagents/default_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/tradingagents/default_config.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ComposerSettings">
+    <execution>
+      <executable />
+    </execution>
+  </component>
+  <component name="DatabaseLocalColorSettings">
+    <colors>
+      <entry key="0c554520-692a-4d24-adc1-e95779c9d547" value="" />
+      <entry key="f8102fc5-4518-458b-a6bd-aa9f372d2898" value="" />
+    </colors>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.0" />
+      <entry key="MS500" value="1.0" />
+      <entry key="S2" value="1.0" />
+      <entry key="S5" value="1.0" />
+      <entry key="S10" value="1.0" />
+      <entry key="S30" value="1.0" />
+      <entry key="S60" value="1.0" />
+      <entry key="M2" value="1.0000000001082379" />
+      <entry key="M5" value="1.0007492385198338" />
+      <entry key="M10" value="1.1473348820868046" />
+      <entry key="M15" value="1.8626984621785012" />
+      <entry key="M30" value="6.074097444481061" />
+      <entry key="H1" value="13.329241606531358" />
+      <entry key="H2" value="20.228712543836348" />
+      <entry key="H4" value="25.016833113058436" />
+      <entry key="D1" value="29.90796565769112" />
+      <entry key="W1" value="30.841500284227713" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="4.875027572880051E-278" />
+      <entry key="S10" value="2.207946460600913E-139" />
+      <entry key="S30" value="6.044175004060618E-47" />
+      <entry key="S60" value="7.806707800136833E-24" />
+      <entry key="M2" value="2.9681037948407925E-12" />
+      <entry key="M5" value="3.186470377535975E-5" />
+      <entry key="M10" value="0.007712033544029073" />
+      <entry key="M15" value="0.048781734476923584" />
+      <entry key="M30" value="0.311062971892939" />
+      <entry key="H1" value="0.7879289566553479" />
+      <entry key="H2" value="1.2550045444356306" />
+      <entry key="H4" value="1.5841975109939717" />
+      <entry key="D1" value="1.923782413532691" />
+      <entry key="W1" value="1.9889291890435339" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="3.6593022130022613E-6" />
+      <entry key="MS500" value="0.0817861294659381" />
+      <entry key="S2" value="0.5347735439426223" />
+      <entry key="S5" value="0.7785167582413032" />
+      <entry key="S10" value="0.8823359667616997" />
+      <entry key="S30" value="0.9591311462985207" />
+      <entry key="S60" value="0.9793524116979141" />
+      <entry key="M2" value="0.9896223582346608" />
+      <entry key="M5" value="0.9966168845960557" />
+      <entry key="M10" value="1.152944049539206" />
+      <entry key="M15" value="1.910013809651717" />
+      <entry key="M30" value="6.384228968615471" />
+      <entry key="H1" value="14.116528489962203" />
+      <entry key="H2" value="21.4833106853955" />
+      <entry key="H4" value="26.60079752132241" />
+      <entry key="D1" value="31.83170409954735" />
+      <entry key="W1" value="32.830423051531014" />
+    </decayedShown>
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "feature/auto-trade",
+    "last_opened_file_path": "/home/mkop/PhpstormProjects/TradingAgents",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)"
+  },
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "sqlite"
+    ]
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+      <recent name="$PROJECT_DIR$/.codex" />
+    </key>
+  </component>
+  <component name="TaskManager">
+    <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="git add save report" />
+    <MESSAGE value="add AGENTS.md" />
+    <option name="LAST_COMMIT_MESSAGE" value="add AGENTS.md" />
+  </component>
+</project>

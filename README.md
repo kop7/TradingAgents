@@ -169,6 +169,31 @@ python -m cli.main     # alternative: run directly from source
 ```
 You will see a screen where you can select your desired tickers, analysis date, LLM provider, research depth, and more.
 
+### Paper trading
+
+At startup the CLI asks you to choose between the original single-ticker
+analysis and paper trading. The original flow only produces its analysis and
+report. Paper trading accepts a comma-separated watchlist of any size, collects
+the model and research settings once, then analyzes every ticker in sequence
+against one shared, long-only virtual account starting with `$1,000`.
+
+After each watchlist analysis, the Portfolio Manager's final rating is executed
+at the latest verified close on or before the analysis date. No real broker API
+is used and no real orders are sent.
+
+- `Buy`: top up the position to at most 20% of portfolio equity.
+- `Overweight`: add 10% of equity, without exceeding the 20% cap.
+- `Hold`: make no trade.
+- `Underweight`: sell half of the open position.
+- `Sell`: close the open position.
+
+The account persists in the repository at `db/portfolio.sqlite`, so it can be
+committed with the project. Each saved analysis also includes
+`paper_portfolio.json`. A repeated run for the same
+ticker and analysis date does not execute a second virtual order. Configure or
+disable it with `TRADINGAGENTS_PAPER_INITIAL_CASH`,
+`TRADINGAGENTS_PAPER_MAX_POSITION_PCT` and `TRADINGAGENTS_PAPER_DB_PATH`.
+
 ### Markets and tickers
 
 TradingAgents works with any market Yahoo Finance covers, using the exchange-suffixed ticker. Company identity and the alpha benchmark resolve automatically per market.

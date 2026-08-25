@@ -1,6 +1,7 @@
 import os
 
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
 # Single source of truth for env-var → config-key overrides. To expose
 # a new config key for environment-based override, add a row here — no
@@ -17,6 +18,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
+    "TRADINGAGENTS_PAPER_INITIAL_CASH":    "paper_initial_cash",
+    "TRADINGAGENTS_PAPER_MAX_POSITION_PCT": "paper_max_position_pct",
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
     "TRADINGAGENTS_LLM_MAX_RETRIES":      "llm_max_retries",
     # Provider-specific reasoning/thinking knobs (None = each provider's own
@@ -77,6 +80,14 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # the oldest resolved entries are pruned once this limit is exceeded.
     # Pending entries are never pruned. None disables rotation entirely.
     "memory_log_max_entries": None,
+    # Local paper-trading account. This never connects to a real broker.
+    "paper_trading_enabled": False,
+    "paper_initial_cash": 1_000.0,
+    "paper_max_position_pct": 0.20,
+    "paper_db_path": os.getenv(
+        "TRADINGAGENTS_PAPER_DB_PATH",
+        os.path.join(_PROJECT_ROOT, "db", "portfolio.sqlite"),
+    ),
     # LLM settings
     "llm_provider": "openai",
     "deep_think_llm": "gpt-5.5",
