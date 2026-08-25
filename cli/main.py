@@ -1256,7 +1256,16 @@ def run_analysis(checkpoint: bool | None = None):
     # Post-analysis prompts (outside Live context for clean interaction)
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
     console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
+    # Automatically save report
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
 
+    try:
+       report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
+       console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
+       console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
+    except Exception as e:
+       console.print(f"[red]Error saving report: {e}[/red]")
     # Prompt to save report
     save_choice = typer.prompt("Save report?", default="Y").strip().upper()
     if save_choice in ("Y", "YES", ""):
