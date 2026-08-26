@@ -6,6 +6,8 @@ services:
     volumes:
       - tradingagents_data:/home/appuser/.tradingagents
       - ./db:/home/appuser/app/db
+      - ./reports:/home/appuser/app/reports
+      - ./exports:/home/appuser/app/exports
     tty: true
     stdin_open: true
 
@@ -28,6 +30,8 @@ services:
     volumes:
       - tradingagents_data:/home/appuser/.tradingagents
       - ./db:/home/appuser/app/db
+      - ./reports:/home/appuser/app/reports
+      - ./exports:/home/appuser/app/exports
     depends_on:
       - ollama
     tty: true

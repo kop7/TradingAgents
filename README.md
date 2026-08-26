@@ -173,26 +173,23 @@ You will see a screen where you can select your desired tickers, analysis date, 
 
 At startup the CLI asks you to choose between the original single-ticker
 analysis and paper trading. The original flow only produces its analysis and
-report. Paper trading accepts a comma-separated watchlist of any size, collects
-the model and research settings once, then analyzes every ticker in sequence
-against one shared, long-only virtual account starting with `$1,000`.
+report. Paper trading accepts a comma-separated watchlist, analyzes every ticker,
+then allocates them together against one persistent, long-only virtual account.
+The default account starts with `$1,000`.
 
-After each watchlist analysis, the Portfolio Manager's final rating is executed
-at the latest verified close on or before the analysis date. No real broker API
-is used and no real orders are sent.
+Orders are stored as pending and executed on the first available market Open
+after the decision date. No real broker API is used and no real orders are sent.
 
-- `Buy`: top up the position to at most 20% of portfolio equity.
-- `Overweight`: add 10% of equity, without exceeding the 20% cap.
+- `Buy`: allocate up to `$20` without exceeding the 20% position cap.
+- `Overweight`: allocate up to `$10` without exceeding the 20% cap.
 - `Hold`: make no trade.
 - `Underweight`: sell half of the open position.
 - `Sell`: close the open position.
 
-The account persists in the repository at `db/portfolio.sqlite`, so it can be
-committed with the project. Each saved analysis also includes
-`paper_portfolio.json`. A repeated run for the same
-ticker and analysis date does not execute a second virtual order. Configure or
-disable it with `TRADINGAGENTS_PAPER_INITIAL_CASH`,
-`TRADINGAGENTS_PAPER_MAX_POSITION_PCT` and `TRADINGAGENTS_PAPER_DB_PATH`.
+The account, append-only cash ledger, decisions, orders, fills, positions and
+daily snapshots persist at `db/paper_trading_v2.sqlite`. A repeated daily run is
+idempotent. See `docs/persistent-paper-trading-usage.md` for commands and
+`docs/paper-trading-sql-queries.md` for statistics queries.
 
 ### Markets and tickers
 

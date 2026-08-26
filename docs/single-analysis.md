@@ -2,7 +2,9 @@
 
 ## Što je Single analysis
 
-Single analysis radi kompletnu multi-agent analizu **jednog tickera** i završava izvještajem Portfolio Managera. Ne kupuje ni ne prodaje, ne koristi virtualni cash i ne mijenja `db/portfolio.sqlite`.
+Single analysis radi kompletnu multi-agent analizu **jednog tickera** i završava
+izvještajem Portfolio Managera. Ne kupuje ni ne prodaje, ne koristi virtualni
+cash i ne mijenja ni legacy ni v2 Paper trading bazu.
 
 Kratki tok:
 

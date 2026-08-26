@@ -20,6 +20,10 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
     "TRADINGAGENTS_PAPER_INITIAL_CASH":    "paper_initial_cash",
     "TRADINGAGENTS_PAPER_MAX_POSITION_PCT": "paper_max_position_pct",
+    "TRADINGAGENTS_PAPER_BUY_NOTIONAL":    "paper_buy_notional",
+    "TRADINGAGENTS_PAPER_OVERWEIGHT_NOTIONAL": "paper_overweight_notional",
+    "TRADINGAGENTS_PAPER_CASH_RESERVE_PCT": "paper_cash_reserve_pct",
+    "TRADINGAGENTS_PAPER_SLIPPAGE_BPS":    "paper_slippage_bps",
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
     "TRADINGAGENTS_LLM_MAX_RETRIES":      "llm_max_retries",
     # Provider-specific reasoning/thinking knobs (None = each provider's own
@@ -84,9 +88,15 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "paper_trading_enabled": False,
     "paper_initial_cash": 1_000.0,
     "paper_max_position_pct": 0.20,
+    "paper_account_name": os.getenv("TRADINGAGENTS_PAPER_ACCOUNT", "default"),
+    "paper_buy_notional": 20.0,
+    "paper_overweight_notional": 10.0,
+    "paper_cash_reserve_pct": 0.10,
+    "paper_slippage_bps": 5.0,
+    "paper_benchmark_symbol": os.getenv("TRADINGAGENTS_PAPER_BENCHMARK", "URA"),
     "paper_db_path": os.getenv(
         "TRADINGAGENTS_PAPER_DB_PATH",
-        os.path.join(_PROJECT_ROOT, "db", "portfolio.sqlite"),
+        os.path.join(_PROJECT_ROOT, "db", "paper_trading_v2.sqlite"),
     ),
     # LLM settings
     "llm_provider": "openai",

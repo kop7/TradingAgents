@@ -4,6 +4,10 @@ Ova dokumentacija opisuje **stvarno ponašanje trenutačne CLI implementacije** 
 
 - [Single analysis — korak po korak](single-analysis.md)
 - [Paper trading — korak po korak](paper-trading.md)
+- [Pokretanje trajnog Paper trading računa](persistent-paper-trading-usage.md)
+- [Imam $1.000 — točne početničke upute](1000-dollars-start-here.md)
+- [SQL upiti za statistiku](paper-trading-sql-queries.md)
+- [Plan trajnog Paper trading računa i statistike](persistent-paper-trading-plan.md)
 
 ## Najkraća razlika
 
@@ -13,7 +17,7 @@ Ova dokumentacija opisuje **stvarno ponašanje trenutačne CLI implementacije** 
 | Analitički pipeline | Da | Da, zasebno za svaki ticker |
 | Postavke modela i agenata | Biraju se jednom | Biraju se jednom i dijele kroz cijelu watchlistu |
 | Završna ocjena | `Buy`, `Overweight`, `Hold`, `Underweight` ili `Sell` | Ista ocjena |
-| Virtualna transakcija | Ne | Da, nakon analize svakog tickera |
+| Virtualna transakcija | Ne | Da, D+1 nakon zajedničke alokacije |
 | Zajednički cash i pozicije | Ne koristi ih | Da, jedan trajni long-only račun |
 | Pravi broker / pravi novac | Ne | Ne |
 
@@ -29,7 +33,9 @@ Odabrani analitičari
   → završna ocjena
 ```
 
-Razlika nastaje tek poslije završne ocjene: Single analysis sprema izvještaj i staje, a Paper trading pokušava primijeniti ocjenu na virtualni portfelj.
+Razlika nastaje poslije završnih ocjena: Single analysis sprema izvještaj i staje,
+a Paper trading prvo prikupi sve odluke, napravi jedan zajednički plan i izvršava
+ga na prvom kasnijem tržišnom Open-u.
 
 ## Pokretanje
 
@@ -65,5 +71,5 @@ Nakon pokretanja CLI prvo pita želiš li `Single analysis` ili `Paper trading`.
 - Paper trading ne šalje naloge brokeru i ne može potrošiti pravi novac.
 - LLM izlaz nije potpuno deterministički. Isti ticker, datum i postavke mogu dati različitu odluku.
 - Datum zaključava tržišni cjenovni prozor, ali izvori vijesti i sentimenta mogu se s vremenom promijeniti.
-- Paper trading nije portfolio optimizer: ne rangira cijelu watchlistu prije ulaganja. Svaki ticker analizira i obrađuje redom.
-
+- Paper trading analizira tickere redom, ali cash mijenja tek nakon jedne zajedničke,
+  determinističke alokacije za cijelu watchlistu.
