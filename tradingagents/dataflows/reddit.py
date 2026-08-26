@@ -21,6 +21,7 @@ import html
 import http.client
 import json
 import logging
+import os
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -47,6 +48,22 @@ _ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 # discussion. wallstreetbets has the most volume but most noise; stocks /
 # investing trend more measured. Caller can override.
 DEFAULT_SUBREDDITS = ("wallstreetbets", "stocks", "investing")
+
+# Public Reddit RSS is deliberately paced conservatively.  Paper-trading
+# watchlists make several ticker searches in one process, so the old one-second
+# gap could still create a burst of requests.  Environment variables allow a
+# deployment with a dedicated egress IP to tune these values without a code
+# change.
+_DEFAULT_REQUEST_DELAY = 3.0
+_DEFAULT_429_BACKOFF = 15.0
+
+
+def _env_seconds(name: str, default: float) -> float:
+    """Read a non-negative delay from the environment, falling back safely."""
+    try:
+        return max(0.0, float(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
 
 
 def _search_qs(ticker: str, limit: int) -> str:
@@ -111,7 +128,9 @@ def _fetch_subreddit_rss(
             root = ET.fromstring(resp.read())
     except HTTPError as exc:
         if exc.code == 429 and _retry:
-            wait = _retry_after_seconds(exc) or 5.0
+            wait = _retry_after_seconds(exc) or _env_seconds(
+                "TRADINGAGENTS_REDDIT_429_BACKOFF", _DEFAULT_429_BACKOFF
+            )
             logger.warning(
                 "Reddit RSS 429 for r/%s · %s — backing off %.1fs then retrying once",
                 sub, ticker, wait,
@@ -193,18 +212,23 @@ def fetch_reddit_posts(
     subreddits: Iterable[str] = DEFAULT_SUBREDDITS,
     limit_per_sub: int = 5,
     timeout: float = 10.0,
-    inter_request_delay: float = 1.0,
+    inter_request_delay: float | None = None,
 ) -> str:
     """Fetch recent Reddit posts mentioning ``ticker`` across finance
     subreddits and return them as a formatted plaintext block.
 
     ``inter_request_delay`` paces the (now RSS-only) per-subreddit requests to
-    stay under Reddit's public per-IP rate limit; combined with the RSS-first
-    path it makes 429s rare even when several analyses run back-to-back.
+    stay under Reddit's public per-IP rate limit.  The default is three seconds
+    and can be changed with ``TRADINGAGENTS_REDDIT_REQUEST_DELAY``.  Pass an
+    explicit value (including zero in tests) to override it for one call.
     """
     # Crypto reaches us as a Yahoo pair (BTC-USD); search Reddit for the base
     # ("BTC") so the query actually matches discussion instead of near-nothing.
     ticker = crypto_base(ticker) or ticker
+    if inter_request_delay is None:
+        inter_request_delay = _env_seconds(
+            "TRADINGAGENTS_REDDIT_REQUEST_DELAY", _DEFAULT_REQUEST_DELAY
+        )
     blocks = []
     total_posts = 0
     for i, sub in enumerate(subreddits):

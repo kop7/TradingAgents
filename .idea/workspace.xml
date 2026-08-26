@@ -4,18 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2fc3bcf2-04e5-4f40-a39b-a7d431e5cf32" name="Changes" comment="add AGENTS.md">
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/db/portfolio.sqlite" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_paper_trading.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tradingagents/paper_trading.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cli/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/cli/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cli/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/cli/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tradingagents/default_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/tradingagents/default_config.py" afterDir="false" />
+    <list default="true" id="2fc3bcf2-04e5-4f40-a39b-a7d431e5cf32" name="Changes" comment="add paper_trading">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_reddit_fallback.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_reddit_fallback.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tradingagents/dataflows/reddit.py" beforeDir="false" afterPath="$PROJECT_DIR$/tradingagents/dataflows/reddit.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -29,7 +21,6 @@
   </component>
   <component name="DatabaseLocalColorSettings">
     <colors>
-      <entry key="0c554520-692a-4d24-adc1-e95779c9d547" value="" />
       <entry key="f8102fc5-4518-458b-a6bd-aa9f372d2898" value="" />
     </colors>
   </component>
@@ -47,72 +38,91 @@
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.0" />
-      <entry key="MS500" value="1.0" />
-      <entry key="S2" value="1.0" />
-      <entry key="S5" value="1.0" />
-      <entry key="S10" value="1.0" />
-      <entry key="S30" value="1.0" />
-      <entry key="S60" value="1.0" />
-      <entry key="M2" value="1.0000000001082379" />
-      <entry key="M5" value="1.0007492385198338" />
-      <entry key="M10" value="1.1473348820868046" />
-      <entry key="M15" value="1.8626984621785012" />
-      <entry key="M30" value="6.074097444481061" />
-      <entry key="H1" value="13.329241606531358" />
-      <entry key="H2" value="20.228712543836348" />
-      <entry key="H4" value="25.016833113058436" />
-      <entry key="D1" value="29.90796565769112" />
-      <entry key="W1" value="30.841500284227713" />
+      <entry key="MS100" value="1.0000000000566198" />
+      <entry key="MS500" value="1.010240237843412" />
+      <entry key="S2" value="1.4978118035034247" />
+      <entry key="S5" value="2.138946236485225" />
+      <entry key="S10" value="2.5075457645110504" />
+      <entry key="S30" value="2.8200523505737336" />
+      <entry key="S60" value="2.926443380228632" />
+      <entry key="M2" value="3.090320648105037" />
+      <entry key="M5" value="3.433109258708176" />
+      <entry key="M10" value="3.761585174425448" />
+      <entry key="M15" value="4.4227962447683264" />
+      <entry key="M30" value="8.3172052953271" />
+      <entry key="H1" value="15.473261973852726" />
+      <entry key="H2" value="22.568858316698794" />
+      <entry key="H4" value="27.605531117597423" />
+      <entry key="D1" value="32.82545960974342" />
+      <entry key="W1" value="33.82933172575954" />
     </decayedCancelled>
     <decayedSelected>
-      <entry key="MS100" value="0.0" />
-      <entry key="MS500" value="0.0" />
-      <entry key="S2" value="0.0" />
-      <entry key="S5" value="4.875027572880051E-278" />
-      <entry key="S10" value="2.207946460600913E-139" />
-      <entry key="S30" value="6.044175004060618E-47" />
-      <entry key="S60" value="7.806707800136833E-24" />
-      <entry key="M2" value="2.9681037948407925E-12" />
-      <entry key="M5" value="3.186470377535975E-5" />
-      <entry key="M10" value="0.007712033544029073" />
-      <entry key="M15" value="0.048781734476923584" />
-      <entry key="M30" value="0.311062971892939" />
-      <entry key="H1" value="0.7879289566553479" />
-      <entry key="H2" value="1.2550045444356306" />
-      <entry key="H4" value="1.5841975109939717" />
-      <entry key="D1" value="1.923782413532691" />
-      <entry key="W1" value="1.9889291890435339" />
+      <entry key="MS100" value="0.06206828096481473" />
+      <entry key="MS500" value="0.5735535121130827" />
+      <entry key="S2" value="0.8702489057381733" />
+      <entry key="S5" value="0.9459265043778058" />
+      <entry key="S10" value="0.9725875304453608" />
+      <entry key="S30" value="0.9907777211746374" />
+      <entry key="S60" value="0.9953781799771569" />
+      <entry key="M2" value="0.9976864136480804" />
+      <entry key="M5" value="0.9990883124364873" />
+      <entry key="M10" value="1.0047194309688874" />
+      <entry key="M15" value="1.0371173611728226" />
+      <entry key="M30" value="1.2723084280481225" />
+      <entry key="H1" value="1.7373455538365628" />
+      <entry key="H2" value="2.2140769885196816" />
+      <entry key="H4" value="2.5581573613172774" />
+      <entry key="D1" value="2.9184763516957544" />
+      <entry key="W1" value="2.988144599823188" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="3.6593022130022613E-6" />
-      <entry key="MS500" value="0.0817861294659381" />
-      <entry key="S2" value="0.5347735439426223" />
-      <entry key="S5" value="0.7785167582413032" />
-      <entry key="S10" value="0.8823359667616997" />
-      <entry key="S30" value="0.9591311462985207" />
-      <entry key="S60" value="0.9793524116979141" />
-      <entry key="M2" value="0.9896223582346608" />
-      <entry key="M5" value="0.9966168845960557" />
-      <entry key="M10" value="1.152944049539206" />
-      <entry key="M15" value="1.910013809651717" />
-      <entry key="M30" value="6.384228968615471" />
-      <entry key="H1" value="14.116528489962203" />
-      <entry key="H2" value="21.4833106853955" />
-      <entry key="H4" value="26.60079752132241" />
-      <entry key="D1" value="31.83170409954735" />
-      <entry key="W1" value="32.830423051531014" />
+      <entry key="MS100" value="0.06206828911631167" />
+      <entry key="MS500" value="0.6078051751495911" />
+      <entry key="S2" value="1.7611916599398842" />
+      <entry key="S5" value="2.773070929048787" />
+      <entry key="S10" value="3.3096702845988992" />
+      <entry key="S30" value="3.750409405974297" />
+      <entry key="S60" value="3.8907586746939926" />
+      <entry key="M2" value="4.071127413344855" />
+      <entry key="M5" value="4.424105055933239" />
+      <entry key="M10" value="4.761780622751384" />
+      <entry key="M15" value="5.456713601472893" />
+      <entry key="M30" value="9.587659835334886" />
+      <entry key="H1" value="17.209487463802194" />
+      <entry key="H2" value="24.782282535673723" />
+      <entry key="H4" value="30.163329392719746" />
+      <entry key="D1" value="35.74387047442231" />
+      <entry key="W1" value="36.81746681541021" />
     </decayedShown>
+  </component>
+  <component name="PhpWorkspaceProjectConfiguration" interpreter_name="/bin/php" />
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 4
+}]]></component>
+  <component name="ProjectId" id="3IRR59xsTR3TtpKEK5Iu0J0Hn3F" />
+  <component name="ProjectViewState">
+    <option name="autoscrollFromSource" value="true" />
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
     "dart.analysis.tool.window.visible": "false",
-    "git-widget-placeholder": "feature/auto-trade",
+    "git.auto.fetch.suggestion.counter": "1",
+    "junie.onboarding.icon.badge.shown": "true",
     "last_opened_file_path": "/home/mkop/PhpstormProjects/TradingAgents",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)"
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "to.speed.mode.migration.done": "true"
   },
   "keyToStringList": {
     "DatabaseDriversLRU": [
@@ -126,12 +136,32 @@
       <recent name="$PROJECT_DIR$/.codex" />
     </key>
   </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-php-predefined-a98d8de5180a-9522f28f0b20-com.jetbrains.php.sharedIndexes-PS-262.9437.196" />
+      </set>
+    </attachedChunks>
+  </component>
   <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="2fc3bcf2-04e5-4f40-a39b-a7d431e5cf32" name="Changes" comment="add paper_trading" />
+      <created>1787725210776</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1787725210776</updated>
+    </task>
     <servers />
   </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
   <component name="VcsManagerConfiguration">
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
+    <option name="CHECK_NEW_TODO" value="false" />
     <MESSAGE value="git add save report" />
     <MESSAGE value="add AGENTS.md" />
-    <option name="LAST_COMMIT_MESSAGE" value="add AGENTS.md" />
+    <MESSAGE value="add paper_trading" />
+    <option name="LAST_COMMIT_MESSAGE" value="add paper_trading" />
   </component>
 </project>

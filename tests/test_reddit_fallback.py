@@ -147,6 +147,22 @@ class TestRss429Backoff:
             reddit._fetch_subreddit_rss("NVDA", "stocks", 5, 5.0)
         slept.assert_called_once_with(12.0)
 
+    def test_default_backoff_is_long_enough_for_watchlist_bursts(self):
+        err = HTTPError("url", 429, "Too Many Requests", {}, None)
+        with patch.object(reddit, "urlopen", side_effect=[err, _atom_resp()]), \
+             patch.object(reddit.time, "sleep") as slept, \
+             patch.dict("os.environ", {}, clear=True):
+            reddit._fetch_subreddit_rss("DNN", "stocks", 5, 5.0)
+        slept.assert_called_once_with(15.0)
+
+    def test_backoff_can_be_configured_from_environment(self):
+        err = HTTPError("url", 429, "Too Many Requests", {}, None)
+        with patch.object(reddit, "urlopen", side_effect=[err, _atom_resp()]), \
+             patch.object(reddit.time, "sleep") as slept, \
+             patch.dict("os.environ", {"TRADINGAGENTS_REDDIT_429_BACKOFF": "25"}):
+            reddit._fetch_subreddit_rss("DNN", "stocks", 5, 5.0)
+        slept.assert_called_once_with(25.0)
+
 
 @pytest.mark.unit
 class TestChunkedTransferErrorsHandled:
@@ -166,6 +182,13 @@ class TestChunkedTransferErrorsHandled:
 
 @pytest.mark.unit
 class TestFormatterHandlesRssPosts:
+    def test_default_request_delay_is_configurable(self):
+        with patch.object(reddit, "_fetch_subreddit", return_value=[]), \
+             patch.object(reddit.time, "sleep") as slept, \
+             patch.dict("os.environ", {"TRADINGAGENTS_REDDIT_REQUEST_DELAY": "4"}):
+            reddit.fetch_reddit_posts("DNN", subreddits=("stocks", "investing"))
+        slept.assert_called_once_with(4.0)
+
     def test_rss_posts_omit_fake_counts_and_note_source(self):
         rss_posts = [{
             "title": "NVDA pops", "score": None, "num_comments": None,
