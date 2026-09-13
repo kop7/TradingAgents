@@ -8,6 +8,47 @@ Ne šalje prave naloge brokeru.
 
 ## 1. Konfiguracija
 
+### MySQL i migracije
+
+Za MySQL 8.0.16 ili noviji u lokalni `.env` upiši:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=host.wmd-ssd3.com
+DB_PORT=3306
+DB_DATABASE=lara242
+DB_USERNAME=lara242
+DB_PASSWORD=unesi_lozinku
+```
+
+Instaliraj ažurirane ovisnosti i pokreni migracije:
+
+```bash
+python -m pip install -e ".[dev]"
+tradingagents db migrate
+```
+
+Ako koristiš Docker:
+
+```bash
+docker compose build tradingagents
+docker compose run --rm tradingagents db migrate
+```
+
+Baza navedena u `DB_DATABASE` mora već postojati. Korisnik treba prava za izradu
+tablica, indeksa, veza, viewa i triggera te čitanje i pisanje podataka. Migracije
+bilježe verziju u `schema_migrations`; ponavljanje naredbe ne briše podatke.
+MySQL naredbe za Paper trading provjeravaju verziju sheme i traže pokretanje
+migracija ako shema još nije spremna.
+
+Ista MySQL baza koristi se za popis tickera, analize, račune, naloge i statistiku.
+Lozinka ostaje u okruženju i ne sprema se u konfiguraciju analize.
+Migracija izrađuje MySQL shemu; ne kopira postojeće podatke iz SQLite baze.
+
+Za SQLite postavi `DB_CONNECTION=sqlite` i `TRADINGAGENTS_PAPER_DB_PATH`.
+Naredba `tradingagents db migrate` podržava i SQLite. Ako `DB_CONNECTION` nije
+postavljen, prisutan `DB_HOST` odabire MySQL; inače se koristi SQLite.
+
 Kopiraj `.env.example` u `.env`, unesi API ključ za odabrani LLM i po potrebi
 postavi:
 
@@ -45,6 +86,43 @@ docker compose run --rm tradingagents paper account-create \
 Ako account već postoji, naredba ga samo prikaže i ne dodaje novih `$1,000`.
 
 ## 3. Prvi dnevni run
+
+U oba Paper trading načina CLI traži odabir jednog ili više aktivnih računa.
+Razmaknica označava račun, Enter potvrđuje odabir. Prikazuju se naziv i saldo.
+Svaki odabrani račun obrađuje se zasebno, uz iste tickere i datum. Postavka
+`TRADINGAGENTS_PAPER_ACCOUNT` ne zamjenjuje ovaj interaktivni odabir.
+
+Tickere možeš unaprijed spremiti u zajednički popis u bazi:
+
+```bash
+tradingagents paper symbols add AAPL MSFT URA
+tradingagents paper symbols list
+tradingagents paper symbols pause AAPL
+tradingagents paper symbols resume AAPL
+tradingagents paper symbols disable MSFT
+tradingagents paper symbols enable MSFT
+```
+
+U Dockeru koristi prefiks `docker compose run --rm tradingagents`, primjerice:
+
+```bash
+docker compose run --rm tradingagents paper symbols add AAPL MSFT URA
+```
+
+Odaberi **Paper trading — use tickers from database** za učitavanje tickera bez
+ručnog unosa. Obrađuju se samo zapisi sa statusom `ACTIVE` i `paper_enabled = 1`.
+Datum i postavke analize biraš jednom za cijeli popis. Prazan popis zaustavlja
+pokretanje uz uputu za dodavanje tickera. Ova opcija ne zakazuje dnevna pokretanja.
+
+Svaki ticker ima jedinstven zapis u tablici `instruments`, a njegove odluke u
+`decisions` povezane su preko `instrument_id`. Spremanje odluke automatski dodaje
+novi ticker; postojeći pauzirani ili isključeni ticker zadržava svoje postavke.
+`pause`/`resume` mijenjaju status, a `disable`/`enable` oznaku za Paper trading.
+Popis vrijedi za sve virtualne račune.
+
+Prvo otvaranje postojeće SQLite baze automatski migrira shemu s v2 na v3, popunjava
+tickere iz postojećih zapisa i povezuje stare odluke. Naziv datoteke baze ostaje
+isti. Migrirani tickeri početno su aktivni i uključeni za Paper trading.
 
 ```bash
 docker compose run --rm tradingagents
@@ -120,4 +198,3 @@ Zatim koristi upite iz [paper-trading-sql-queries.md](paper-trading-sql-queries.
 - pokreći istu watchlistu i dosljedan dnevni termin;
 - ne zaključuj iz nekoliko trgovina; gledaj dulje razdoblje i benchmark;
 - backupiraj `db/paper_trading_v2.sqlite` prije većih promjena.
-

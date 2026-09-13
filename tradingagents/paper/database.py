@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 SCHEMA_SQL = """
@@ -214,7 +214,7 @@ GROUP BY a.id;
 
 
 class PaperDatabase:
-    """Own a versioned SQLite database dedicated to v2 paper trading."""
+    """Own a versioned SQLite database for persistent paper trading."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path).expanduser().resolve()
@@ -237,16 +237,61 @@ class PaperDatabase:
                     f"Paper database schema {current} is newer than supported {SCHEMA_VERSION}"
                 )
             connection.executescript(SCHEMA_SQL)
+            connection.execute("BEGIN IMMEDIATE")
+            current = int(connection.execute("PRAGMA user_version").fetchone()[0])
             now = datetime.now(UTC).isoformat()
+            if current < 3:
+                self._migrate_instruments(connection, now)
             connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, name, applied_at) VALUES (?, ?, ?)",
-                (SCHEMA_VERSION, "clean persistent paper-trading schema", now),
+                (SCHEMA_VERSION, "ticker registry and analysis relations", now),
             )
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
             if integrity != "ok":
                 raise RuntimeError(f"Paper database integrity check failed: {integrity}")
         return self
+
+    @staticmethod
+    def _migrate_instruments(connection: sqlite3.Connection, now: str) -> None:
+        from tradingagents.dataflows.symbol_utils import normalize_symbol
+
+        connection.execute("""CREATE TABLE instruments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL UNIQUE,
+            asset_type TEXT,
+            status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED')),
+            paper_enabled INTEGER NOT NULL DEFAULT 1 CHECK (paper_enabled IN (0, 1)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )""")
+        connection.execute(
+            "ALTER TABLE decisions ADD COLUMN instrument_id INTEGER "
+            "REFERENCES instruments(id) ON DELETE RESTRICT"
+        )
+        symbols = connection.execute("""
+            SELECT symbol FROM decisions UNION SELECT symbol FROM orders
+            UNION SELECT symbol FROM fills UNION SELECT symbol FROM account_positions
+            UNION SELECT symbol FROM price_snapshots
+            UNION SELECT symbol FROM position_daily_snapshots
+        """).fetchall()
+        for row in symbols:
+            symbol = normalize_symbol(row[0])
+            connection.execute(
+                "INSERT OR IGNORE INTO instruments(symbol, created_at, updated_at) VALUES (?, ?, ?)",
+                (symbol, now, now),
+            )
+            connection.execute(
+                "UPDATE decisions SET instrument_id = "
+                "(SELECT id FROM instruments WHERE symbol = ?) WHERE symbol = ?",
+                (symbol, row[0]),
+            )
+        connection.execute(
+            "CREATE INDEX idx_decisions_instrument_date ON decisions(instrument_id, analysis_date)"
+        )
+        connection.execute(
+            "CREATE INDEX idx_instruments_paper ON instruments(status, paper_enabled, symbol)"
+        )
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
@@ -260,4 +305,3 @@ class PaperDatabase:
             raise
         finally:
             connection.close()
-

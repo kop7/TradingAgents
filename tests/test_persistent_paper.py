@@ -18,6 +18,65 @@ from tradingagents.paper.service import PersistentPaperService
 from tradingagents.paper.statistics import portfolio_summary
 
 
+def test_ticker_registry_links_decisions_without_reenabling_tickers(tmp_path):
+    repo = PaperRepository(tmp_path / "paper.sqlite")
+    instrument = repo.upsert_instrument("aapl")
+    assert repo.upsert_instrument(" AAPL ").id == instrument.id
+    repo.set_instrument_paper_enabled("AAPL", False)
+    repo.upsert_instrument("MSFT")
+    repo.set_instrument_status("MSFT", "PAUSED")
+    repo.upsert_instrument("URA")
+    assert [item.symbol for item in repo.list_instruments(active_only=True)] == ["URA"]
+    account = repo.create_account("test", 100)
+    for key in ("first", "second"):
+        run, _ = repo.create_run(
+            account.id, run_key=key, analysis_date="2026-01-02", symbols=["AAPL"]
+        )
+        decision = repo.save_decision(
+            run.id, symbol="aapl", analysis_date="2026-01-02",
+            rating="HOLD", raw_decision_text="Hold",
+        )
+        assert decision.instrument_id == instrument.id
+    assert [item.symbol for item in repo.list_instruments(active_only=True)] == ["URA"]
+    with repo.connect() as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM decisions WHERE instrument_id = ?", (instrument.id,)
+        ).fetchone()[0] == 2
+    with pytest.raises(LookupError):
+        repo.set_instrument_status("MISSING", "PAUSED")
+    with pytest.raises(ValueError):
+        repo.upsert_instrument("../BAD")
+
+
+def test_v2_migration_preserves_existing_analysis_and_is_repeatable(tmp_path):
+    import sqlite3
+
+    from tradingagents.paper.database import SCHEMA_SQL
+
+    path = tmp_path / "legacy.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.executescript(SCHEMA_SQL)
+        connection.execute("PRAGMA user_version = 2")
+        connection.execute("""INSERT INTO accounts(id, name, created_at, updated_at)
+            VALUES (1, 'legacy', 'before', 'before')""")
+        connection.execute("""INSERT INTO analysis_runs
+            (id, account_id, run_key, analysis_date, status, requested_symbols_json, started_at)
+            VALUES (1, 1, 'legacy', '2026-01-02', 'COMPLETED', '["AAPL"]', 'before')""")
+        connection.execute("""INSERT INTO decisions
+            (run_id, symbol, analysis_date, rating, raw_decision_text, created_at, updated_at)
+            VALUES (1, 'AAPL', '2026-01-02', 'HOLD', 'Legacy analysis', 'before', 'before')""")
+    repo = PaperRepository(path)
+    repo = PaperRepository(path)
+    with repo.connect() as connection:
+        row = connection.execute("""SELECT d.raw_decision_text, d.created_at, i.symbol
+            FROM decisions d JOIN instruments i ON i.id = d.instrument_id""").fetchone()
+        assert tuple(row) == ("Legacy analysis", "before", "AAPL")
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute("UPDATE decisions SET instrument_id = 999")
+
+
 def _prices(*_args):
     return pd.DataFrame(
         {

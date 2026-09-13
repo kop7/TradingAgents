@@ -2,7 +2,7 @@
 
 ## Što radi
 
-Paper trading koristi jedan trajni virtualni račun iz SQLite baze. Analizira cijelu
+Paper trading koristi jedan trajni virtualni račun iz MySQL ili SQLite baze. Analizira cijelu
 watchlistu, sprema odluke, radi zajednički plan ulaganja i tek na kasnijem runu
 izvršava naloge po prvom tržišnom `Open` podatku nakon datuma odluke.
 
@@ -25,6 +25,18 @@ a gotovi upiti u [SQL statistici](paper-trading-sql-queries.md).
 
 ## 1. Odabir Paper trading moda
 
+Za automatsko učitavanje tickera najprije dodaj popis:
+
+```bash
+tradingagents paper symbols add CCJ UEC DNN
+```
+
+U izborniku odaberi **Paper trading — use tickers from database**. CLI učitava
+aktivne tickere uključene za Paper trading i odmah prelazi na zajedničke postavke
+analize. Svaka spremljena odluka povezana je s tickerom u tablici `instruments`.
+Naredbom `tradingagents paper symbols list` možeš pregledati popis, a naredbama
+`disable` i `enable` isključiti ili uključiti pojedini ticker.
+
 Pokreni CLI i odaberi:
 
 ```text
@@ -40,7 +52,12 @@ CCJ, UEC, DNN, NXE, UUUU, URG, EU, UROY, LEU, AEC, ISOU
 CLI validira, normalizira i uklanja duplikate. Postavke datuma, analitičara,
 modela i research deptha biraš jednom za cijelu watchlistu.
 
-## 2. Račun se učitava iz nove baze
+## 2. Račun se učitava iz odabrane baze
+
+Za MySQL definiraj `DB_CONNECTION=mysql`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`,
+`DB_USERNAME` i `DB_PASSWORD`, pa pokreni `tradingagents db migrate`.
+Tickere i račune zatim uređuješ istim Paper trading naredbama. Detalji su u
+[uputama za pokretanje](persistent-paper-trading-usage.md).
 
 V2 baza je po defaultu `db/paper_trading_v2.sqlite`. Račun se traži po nazivu iz
 `TRADINGAGENTS_PAPER_ACCOUNT`. Ako ne postoji, prvi Paper run ga stvara i jednom

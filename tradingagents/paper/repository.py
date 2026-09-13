@@ -10,7 +10,15 @@ from decimal import ROUND_HALF_EVEN, Decimal
 from pathlib import Path
 
 from tradingagents.paper.database import PaperDatabase
-from tradingagents.paper.models import Account, AnalysisRun, Decision, Fill, Order, Position
+from tradingagents.paper.models import (
+    Account,
+    AnalysisRun,
+    Decision,
+    Fill,
+    Instrument,
+    Order,
+    Position,
+)
 from tradingagents.paper.money import (
     as_decimal,
     micros_to_money,
@@ -20,6 +28,7 @@ from tradingagents.paper.money import (
     signed_notional_micros,
     weighted_price_micros,
 )
+from tradingagents.paper.mysql import MySQLDatabase
 
 
 def _now() -> str:
@@ -41,12 +50,87 @@ def _json(value) -> str:
 
 
 class PaperRepository:
-    def __init__(self, database: PaperDatabase | str | Path):
-        self.database = database if isinstance(database, PaperDatabase) else PaperDatabase(database)
+    def __init__(self, database: PaperDatabase | MySQLDatabase | str | Path):
+        self.database = (
+            database if isinstance(database, (PaperDatabase, MySQLDatabase)) else PaperDatabase(database)
+        )
         self.database.initialize()
 
     def connect(self):
         return self.database.connect()
+
+    @staticmethod
+    def _ensure_instrument(connection, symbol: str) -> int:
+        now = _now()
+        connection.execute(
+            "INSERT INTO instruments(symbol, created_at, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(symbol) DO NOTHING", (symbol, now, now),
+        )
+        return int(connection.execute(
+            "SELECT id FROM instruments WHERE symbol = ?", (symbol,)
+        ).fetchone()[0])
+
+    def upsert_instrument(self, symbol: str, *, asset_type: str | None = None) -> Instrument:
+        from tradingagents.dataflows.symbol_utils import is_yahoo_safe
+
+        canonical = _canonical_symbol(symbol)
+        if not is_yahoo_safe(canonical) or canonical.startswith(".") or len(canonical) > 32:
+            raise ValueError(f"Invalid ticker symbol: {symbol}")
+        with self.database.transaction() as connection:
+            instrument_id = self._ensure_instrument(connection, canonical)
+            if asset_type is not None:
+                connection.execute(
+                    "UPDATE instruments SET asset_type = ?, updated_at = ? WHERE id = ?",
+                    (asset_type, _now(), instrument_id),
+                )
+            return _row(Instrument, connection.execute(
+                "SELECT * FROM instruments WHERE id = ?", (instrument_id,)
+            ).fetchone())
+
+    def list_instruments(self, *, active_only: bool = False) -> tuple[Instrument, ...]:
+        clause = "WHERE status = 'ACTIVE' AND paper_enabled = 1" if active_only else ""
+        with self.connect() as connection:
+            return tuple(_row(Instrument, row) for row in connection.execute(
+                f"SELECT * FROM instruments {clause} ORDER BY symbol"
+            ))
+
+    def add_instruments(self, symbols: Iterable[str]) -> tuple[str, ...]:
+        """Insert a validated batch atomically, preserving all existing ticker settings."""
+        from tradingagents.dataflows.symbol_utils import is_yahoo_safe
+
+        normalized = list(dict.fromkeys(_canonical_symbol(symbol) for symbol in symbols))
+        if any(
+            not is_yahoo_safe(symbol) or symbol.startswith(".") or len(symbol) > 32
+            for symbol in normalized
+        ):
+            raise ValueError("Invalid ticker symbol")
+        added = []
+        with self.database.transaction() as connection:
+            for symbol in normalized:
+                if connection.execute(
+                    "SELECT id FROM instruments WHERE symbol = ?", (symbol,)
+                ).fetchone() is not None:
+                    continue
+                self._ensure_instrument(connection, symbol)
+                added.append(symbol)
+        return tuple(added)
+
+    def set_instrument_status(self, symbol: str, status: str) -> None:
+        if status not in {"ACTIVE", "PAUSED"}:
+            raise ValueError("Instrument status must be ACTIVE or PAUSED")
+        self._update_instrument(symbol, "status", status)
+
+    def set_instrument_paper_enabled(self, symbol: str, enabled: bool) -> None:
+        self._update_instrument(symbol, "paper_enabled", int(enabled))
+
+    def _update_instrument(self, symbol: str, field: str, value) -> None:
+        with self.database.transaction() as connection:
+            cursor = connection.execute(
+                f"UPDATE instruments SET {field} = ?, updated_at = ? WHERE symbol = ?",
+                (value, _now(), _canonical_symbol(symbol)),
+            )
+            if cursor.rowcount == 0:
+                raise LookupError(f"Ticker does not exist: {symbol}")
 
     def create_account(
         self,
@@ -232,12 +316,13 @@ class PaperRepository:
         with self.database.transaction() as connection:
             connection.execute(
                 """INSERT INTO decisions
-                   (run_id, symbol, analysis_date, rating, raw_decision_text,
+                   (instrument_id, run_id, symbol, analysis_date, rating, raw_decision_text,
                     conviction_micros, reference_price_micros, price_as_of,
                     price_snapshot_id, report_path, report_hash, status, error_text,
                     created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(run_id, symbol) DO UPDATE SET
+                     instrument_id = excluded.instrument_id,
                      rating = excluded.rating,
                      raw_decision_text = excluded.raw_decision_text,
                      conviction_micros = excluded.conviction_micros,
@@ -250,6 +335,7 @@ class PaperRepository:
                      error_text = excluded.error_text,
                      updated_at = excluded.updated_at""",
                 (
+                    self._ensure_instrument(connection, canonical),
                     run_id, canonical, analysis_date, rating_value, raw_decision_text,
                     conviction_micros, reference_micros, price_as_of,
                     price_snapshot_id, report_path, report_hash, status, error_text,

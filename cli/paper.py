@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 from pathlib import Path
 
 import typer
@@ -12,17 +13,92 @@ from rich.table import Table
 
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.paper import PaperRepository
+from tradingagents.paper.connection import configured_database
 from tradingagents.paper.exports import export_account
 from tradingagents.paper.money import micros_to_money, nanos_to_quantity
 from tradingagents.paper.statistics import portfolio_summary
 
 paper_app = typer.Typer(help="Persistent virtual accounts, positions, statistics, and exports.")
+symbols_app = typer.Typer(help="Manage the shared database ticker list.")
+paper_app.add_typer(symbols_app, name="symbols")
 console = Console()
 _OUTPUT_OPTION = typer.Option(None, "--output")
+_SYMBOLS_ARGUMENT = typer.Argument(None)
+_SYMBOLS_FILE_OPTION = typer.Option(
+    None, "--file", exists=True, dir_okay=False, readable=True,
+    help="UTF-8 text file with comma/whitespace-separated tickers (no header).",
+)
 
 
 def repository() -> PaperRepository:
-    return PaperRepository(DEFAULT_CONFIG["paper_db_path"])
+    return PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
+
+
+@symbols_app.command("add")
+@symbols_app.command("add-bulk")
+def symbols_add(
+    symbols: list[str] | None = _SYMBOLS_ARGUMENT,
+    file: Path | None = _SYMBOLS_FILE_OPTION,
+):
+    raw = " ".join(symbols or [])
+    if file is not None:
+        try:
+            raw += " " + file.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError) as exc:
+            raise typer.BadParameter("Cannot read ticker file as UTF-8") from exc
+    tokens = [token for token in re.split(r"[,\s]+", raw.strip()) if token]
+    if not tokens:
+        raise typer.BadParameter("Provide tickers or --file")
+    repo = repository()
+    try:
+        added = repo.add_instruments(tokens)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(f"Added: {len(added)}. Duplicates skipped: {len(tokens) - len(added)}.")
+    if added:
+        console.print(", ".join(added))
+
+
+@symbols_app.command("list")
+def symbols_list():
+    table = Table(title="Database tickers", box=box.SIMPLE_HEAVY)
+    for column in ("ID", "Ticker", "Status", "Paper enabled"):
+        table.add_column(column)
+    for item in repository().list_instruments():
+        table.add_row(str(item.id), item.symbol, item.status, "yes" if item.paper_enabled else "no")
+    console.print(table)
+
+
+def _change_symbol(symbol: str, *, status: str | None = None, enabled: bool | None = None):
+    repo = repository()
+    try:
+        if status is not None:
+            repo.set_instrument_status(symbol, status)
+        if enabled is not None:
+            repo.set_instrument_paper_enabled(symbol, enabled)
+    except (LookupError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(f"Updated ticker: {symbol}")
+
+
+@symbols_app.command("pause")
+def symbols_pause(symbol: str):
+    _change_symbol(symbol, status="PAUSED")
+
+
+@symbols_app.command("resume")
+def symbols_resume(symbol: str):
+    _change_symbol(symbol, status="ACTIVE")
+
+
+@symbols_app.command("enable")
+def symbols_enable(symbol: str):
+    _change_symbol(symbol, enabled=True)
+
+
+@symbols_app.command("disable")
+def symbols_disable(symbol: str):
+    _change_symbol(symbol, enabled=False)
 
 
 def resolve_account(repo: PaperRepository, name: str):

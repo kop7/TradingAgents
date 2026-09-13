@@ -31,6 +31,8 @@ _API_KEY_ENV_VARS = (
 
 @pytest.fixture(autouse=True)
 def _dummy_api_keys(monkeypatch):
+    # Unit tests must never connect to the user's DB_* server from .env.
+    monkeypatch.setenv("DB_CONNECTION", "sqlite")
     for env_var in _API_KEY_ENV_VARS:
         # `or` not a .get default: an env var present but empty (e.g. a key left
         # blank in a .env copied from .env.example) must still get the placeholder.

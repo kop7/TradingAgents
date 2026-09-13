@@ -113,6 +113,17 @@ class AnalysisRun:
 
 
 @dataclass(frozen=True)
+class Instrument:
+    id: int
+    symbol: str
+    asset_type: str | None
+    status: str
+    paper_enabled: int
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
 class Decision:
     id: int
     run_id: int
@@ -130,6 +141,7 @@ class Decision:
     error_text: str | None
     created_at: str
     updated_at: str
+    instrument_id: int | None = None
 
 
 @dataclass(frozen=True)

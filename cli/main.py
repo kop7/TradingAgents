@@ -23,6 +23,7 @@ from rich.table import Table
 from rich.text import Text
 
 from cli.announcements import display_announcements, fetch_announcements
+from cli.database import database_app
 from cli.paper import paper_app
 from cli.stats_handler import StatsCallbackHandler
 from cli.utils import (
@@ -58,6 +59,7 @@ from tradingagents.graph.analyst_execution import (
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.paper import PaperRepository
 from tradingagents.paper.allocator import AllocationPolicy
+from tradingagents.paper.connection import configured_database
 from tradingagents.paper.money import micros_to_money, nanos_to_quantity
 from tradingagents.paper.prices import fetch_valuation_close
 from tradingagents.paper.service import PersistentPaperService
@@ -84,6 +86,7 @@ app = typer.Typer(
     add_completion=True,  # Enable shell completion
 )
 app.add_typer(paper_app, name="paper")
+app.add_typer(database_app, name="db")
 
 
 @app.callback(invoke_without_command=True)
@@ -1395,6 +1398,10 @@ def select_workflow_mode() -> str:
                 "Paper trading — analyze a watchlist and trade the virtual portfolio",
                 value="paper_trading",
             ),
+            questionary.Choice(
+                "Paper trading — use tickers from database",
+                value="paper_trading_db",
+            ),
         ],
         instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
         style=questionary.Style(
@@ -1448,6 +1455,19 @@ def get_paper_watchlist() -> list[str]:
     return parse_watchlist(raw)
 
 
+def get_paper_database_watchlist() -> list[str]:
+    repo = PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
+    tickers = [item.symbol for item in repo.list_instruments(active_only=True)]
+    if not tickers:
+        console.print(
+            "[yellow]No active paper tickers in the database. "
+            "Add them with: tradingagents paper symbols add AAPL MSFT[/yellow]"
+        )
+        raise typer.Exit(code=1)
+    console.print(f"[cyan]Database tickers:[/cyan] {', '.join(tickers)}")
+    return tickers
+
+
 def _watchlist_error(raw: str) -> str | None:
     try:
         parse_watchlist(raw)
@@ -1494,8 +1514,36 @@ def _display_persistent_account(repo: PaperRepository, account) -> None:
     console.print(table)
 
 
+def select_paper_accounts() -> list[str]:
+    repo = PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
+    accounts = [account for account in repo.list_accounts() if account.status == "ACTIVE"]
+    if not accounts:
+        console.print(
+            "[yellow]No active paper accounts. Create one with: "
+            "tradingagents paper account-create --name default --cash 1000[/yellow]"
+        )
+        raise typer.Exit(code=1)
+    selected = questionary.checkbox(
+        "Select accounts for Paper trading:",
+        choices=[
+            questionary.Choice(
+                f"{account.name} — {repo.get_balance(account.id):,.2f} {account.currency}",
+                value=account.name,
+            )
+            for account in accounts
+        ],
+        instruction="Space: select/unselect accounts; Enter: start with selected accounts",
+        validate=lambda values: bool(values) or "Select at least one account.",
+    ).ask()
+    if not selected:
+        console.print("[yellow]No accounts selected. Exiting.[/yellow]")
+        raise typer.Exit(code=1)
+    return selected
+
+
 def run_persistent_paper_batch(
-    tickers: list[str], shared_selections: dict, checkpoint: bool | None
+    tickers: list[str], shared_selections: dict, checkpoint: bool | None,
+    *, account_name: str | None = None,
 ) -> None:
     """Run one resumable, portfolio-aware paper experiment for a watchlist."""
     strategy_config = {
@@ -1505,8 +1553,8 @@ def run_persistent_paper_batch(
         "cash_reserve_pct": DEFAULT_CONFIG["paper_cash_reserve_pct"],
         "slippage_bps": DEFAULT_CONFIG["paper_slippage_bps"],
     }
-    repo = PaperRepository(DEFAULT_CONFIG["paper_db_path"])
-    account = repo.get_or_create_account(
+    repo = PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
+    account = repo.get_account(account_name) if account_name is not None else repo.get_or_create_account(
         DEFAULT_CONFIG["paper_account_name"],
         DEFAULT_CONFIG["paper_initial_cash"],
         strategy_config=strategy_config,
@@ -1562,7 +1610,11 @@ def run_persistent_paper_batch(
         symbols=tickers,
         config={"watchlist": tickers, "strategy": stored_config},
     )
-    if not created and run.status == "COMPLETED":
+    saved_decisions = repo.get_decisions(run.id)
+    completed_symbols = {
+        decision.symbol for decision in saved_decisions if decision.status == "COMPLETED"
+    }
+    if not created and run.status == "COMPLETED" and set(tickers) <= completed_symbols:
         console.print(
             f"[yellow]Daily run {analysis_date} is already complete; no duplicate "
             "analysis or orders were created.[/yellow]"
@@ -1570,11 +1622,6 @@ def run_persistent_paper_batch(
         _display_persistent_account(repo, account)
         return
 
-    completed_symbols = {
-        decision.symbol
-        for decision in repo.get_decisions(run.id)
-        if decision.status == "COMPLETED"
-    }
     repo.set_run_status(run.id, "ANALYZING")
     failures: list[tuple[str, str]] = []
     for index, ticker in enumerate(tickers, start=1):
@@ -1684,7 +1731,7 @@ def run_persistent_paper_batch(
         raise ValueError("Final snapshot failed: " + "; ".join(final_snapshot.errors))
     repo.set_run_status(
         run.id,
-        "COMPLETED",
+        "PARTIAL_ANALYSIS" if failures else "COMPLETED",
         "; ".join(error for _, error in failures) if failures else None,
     )
     console.print(
@@ -1708,14 +1755,31 @@ def run_analysis(checkpoint: bool | None = None):
         )
         return
 
-    tickers = get_paper_watchlist()
+    tickers = (
+        get_paper_database_watchlist()
+        if workflow == "paper_trading_db"
+        else get_paper_watchlist()
+    )
+    account_names = select_paper_accounts()
     shared_selections = get_user_selections(selected_ticker=tickers[0])
     console.print(
         f"\n[bold cyan]Paper trading batch:[/bold cyan] "
-        f"{len(tickers)} ticker(s) using one shared virtual portfolio."
+        f"{len(tickers)} ticker(s) across {len(account_names)} selected account(s)."
     )
 
-    run_persistent_paper_batch(tickers, shared_selections, checkpoint)
+    failed_accounts = []
+    for account_name in account_names:
+        console.print(Rule(f"Paper account — {account_name}", style="bold cyan"))
+        try:
+            run_persistent_paper_batch(
+                tickers, shared_selections, checkpoint, account_name=account_name,
+            )
+        except Exception as exc:
+            failed_accounts.append(account_name)
+            console.print(f"[red]Paper account {account_name} failed: {exc}[/red]")
+    if failed_accounts:
+        console.print(f"[red]Failed accounts: {', '.join(failed_accounts)}[/red]")
+        raise typer.Exit(code=1)
 
 
 @app.command()
