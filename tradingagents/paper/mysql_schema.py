@@ -1,5 +1,7 @@
 """Versioned MySQL DDL. Integer money and quantities use signed BIGINT."""
 
+from tradingagents.paper.report_schema import MYSQL_REPORTS
+
 MIGRATIONS = ((3, "persistent paper accounts and ticker registry", (
     """CREATE TABLE IF NOT EXISTS instruments (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -199,3 +201,5 @@ TRIGGERS = {
     "cash_ledger_no_delete": """CREATE TRIGGER cash_ledger_no_delete BEFORE DELETE ON cash_ledger
         FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'cash_ledger is append-only'""",
 }
+
+MIGRATIONS += ((4, "markdown analysis reports", (MYSQL_REPORTS,)),)

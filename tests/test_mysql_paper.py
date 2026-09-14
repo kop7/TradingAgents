@@ -138,3 +138,28 @@ def test_sqlite_migration_command(tmp_path, monkeypatch):
     result = CliRunner().invoke(app, ["db", "migrate"])
     assert result.exit_code == 0, result.output
     assert "SQLite migrations complete" in result.output
+
+
+@pytest.mark.integration
+def test_mysql_report_migration(mysql_database):
+    from tests.test_report_database import bundle
+    from tradingagents.paper.mysql_schema import MIGRATIONS
+    from tradingagents.reporting import render_reports
+
+    # Seed a real v3 database and verify v4 only adds report storage.
+    mysql_database.migrate()
+    repo = PaperRepository(mysql_database)
+    existing = repo.create_account("existing", 123)
+    with mysql_database.connect() as connection:
+        connection.execute("DROP TABLE analysis_reports")
+        connection.execute("DELETE FROM schema_migrations WHERE version = 4")
+    assert MIGRATIONS[-1][0] == 4
+    mysql_database.migrate()
+    mysql_database.migrate()
+    assert repo.get_balance(existing.id) == 123
+    # Bundle check expects only its own account.
+    check_repo = PaperRepository(mysql_database)
+    check_repo.save_reports("UEC", "2026-01-02", render_reports(bundle(), "UEC"),
+                            execution_key="single:test")
+    with check_repo.connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM analysis_reports").fetchone()[0] == 13

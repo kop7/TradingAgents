@@ -71,7 +71,7 @@ def test_v2_migration_preserves_existing_analysis_and_is_repeatable(tmp_path):
         row = connection.execute("""SELECT d.raw_decision_text, d.created_at, i.symbol
             FROM decisions d JOIN instruments i ON i.id = d.instrument_id""").fetchone()
         assert tuple(row) == ("Legacy analysis", "before", "AAPL")
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         with pytest.raises(sqlite3.IntegrityError):
             connection.execute("UPDATE decisions SET instrument_id = 999")

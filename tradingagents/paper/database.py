@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 SCHEMA_SQL = """
@@ -242,9 +242,20 @@ class PaperDatabase:
             now = datetime.now(UTC).isoformat()
             if current < 3:
                 self._migrate_instruments(connection, now)
+            if current < 4:
+                from tradingagents.paper.report_schema import SQLITE_REPORTS
+
+                connection.execute(SQLITE_REPORTS)
+                connection.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_reports_ticker_date "
+                    "ON analysis_reports(instrument_id, analysis_date)"
+                )
+                connection.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_reports_run ON analysis_reports(run_id)"
+                )
             connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, name, applied_at) VALUES (?, ?, ?)",
-                (SCHEMA_VERSION, "ticker registry and analysis relations", now),
+                (SCHEMA_VERSION, "markdown analysis reports", now),
             )
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]

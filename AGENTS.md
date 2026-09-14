@@ -89,6 +89,10 @@ is an optional extra: `python -m pip install -e ".[dev,bedrock]"`.
   `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`. Run `tradingagents db migrate`
   explicitly for schema changes. Keep credentials out of analysis configs.
   MySQL integration tests use only `TEST_MYSQL_*` settings and disposable databases.
+- CLI Markdown reports are stored in `analysis_reports` (schema v4) as well as
+  files. `render_reports` is the shared renderer. Single analyses use an execution
+  key without a paper account; paper reports link to `analysis_runs`. Historical
+  file import is explicit via `tradingagents db import-reports`.
 - Preserve existing local accounts and generated artifacts. The default SQLite paper
   account database is `db/paper_trading_v2.sqlite`; analysis logs, caches, and
   memory default under `~/.tradingagents`. Tests must use isolated storage rather

@@ -59,6 +59,36 @@ class PaperRepository:
     def connect(self):
         return self.database.connect()
 
+    def save_reports(self, symbol, analysis_date, reports, *, run_id=None, execution_key=None):
+        """Persist a complete generated report bundle in one transaction."""
+        if run_id is not None:
+            execution_key = f"paper:{run_id}"
+        if not execution_key:
+            raise ValueError("An execution key is required for single analysis reports")
+        now = _now()
+        with self.database.transaction() as connection:
+            if run_id is not None:
+                run = connection.execute(
+                    "SELECT analysis_date FROM analysis_runs WHERE id = ?", (run_id,)
+                ).fetchone()
+                if run is None or run[0] != analysis_date:
+                    raise ValueError("Report date must match an existing analysis run")
+            instrument_id = self._ensure_instrument(connection, _canonical_symbol(symbol))
+            for report_type, content in reports.items():
+                if not content or not content.strip():
+                    continue
+                connection.execute(
+                    """INSERT INTO analysis_reports
+                    (instrument_id, run_id, execution_key, report_type, content_markdown,
+                     analysis_date, content_hash, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(instrument_id, execution_key, report_type) DO UPDATE SET
+                      content_markdown = excluded.content_markdown,
+                      content_hash = excluded.content_hash, updated_at = excluded.updated_at""",
+                    (instrument_id, run_id, execution_key, report_type, content, analysis_date,
+                     hashlib.sha256(content.encode("utf-8")).hexdigest(), now, now),
+                )
+
     @staticmethod
     def _ensure_instrument(connection, symbol: str) -> int:
         now = _now()

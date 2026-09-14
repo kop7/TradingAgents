@@ -1,6 +1,6 @@
 # Paper trading — MySQL statistika i operativni pregled
 
-Vodič za **MySQL 8.0.16+**, shemu v3. Zamjenjuje ranije SQLite primjere.
+Vodič za **MySQL 8.0.16+**, shemu v4. Zamjenjuje ranije SQLite primjere.
 Svi upiti čitaju podatke; `SET` mijenja samo varijable trenutne konekcije.
 Prije korištenja pokreni `tradingagents db migrate`.
 
@@ -305,8 +305,10 @@ WHERE r.account_id = @account_id AND d.symbol = @ticker
 ORDER BY d.analysis_date DESC, d.id DESC;
 ```
 
-`raw_decision_text` je finalna odluka, a kompletan izvještaj je u datoteci na
-`report_path`. Dobit prodaje ne pripisuj samo SELL signalu: ovisi o ranijim kupnjama.
+`raw_decision_text` je finalna odluka. Od sheme v4 svi novi CLI Markdown izvještaji
+spremaju se i u `analysis_reports`; datoteka je dostupna preko `report_path`.
+Detalji i SQL primjeri su u [vodiču izvještaja](analysis-reports-database.md).
+Dobit prodaje ne pripisuj samo SELL signalu: ovisi o ranijim kupnjama.
 
 ## 13. Zdravlje runova i pokrivenost tickera
 

@@ -7,6 +7,7 @@ import time
 from collections import deque
 from functools import wraps
 from pathlib import Path
+from uuid import uuid4
 
 import questionary
 import typer
@@ -64,7 +65,7 @@ from tradingagents.paper.money import micros_to_money, nanos_to_quantity
 from tradingagents.paper.prices import fetch_valuation_close
 from tradingagents.paper.service import PersistentPaperService
 from tradingagents.paper_trading import PaperPortfolio, fetch_execution_price
-from tradingagents.reporting import write_report_tree
+from tradingagents.reporting import render_reports, write_report_tree
 
 console = Console()
 
@@ -1092,6 +1093,8 @@ def _run_selected_analysis(
     message_buffer = MessageBuffer()
     config = _build_run_config(selections, checkpoint)
     config["paper_trading_enabled"] = paper_trading
+    # Check connectivity/schema before starting potentially expensive LLM work.
+    report_repo = PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()
@@ -1342,6 +1345,11 @@ def _run_selected_analysis(
     # Post-analysis actions (outside Live context for clean interaction)
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
     console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
+    report_repo.save_reports(
+        selections["ticker"], selections["analysis_date"],
+        render_reports(final_state, selections["ticker"]),
+        run_id=selections.get("paper_run_id"), execution_key=f"single:{uuid4()}",
+    )
     # Automatically save report
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     save_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
@@ -1629,6 +1637,7 @@ def run_persistent_paper_batch(
             console.print(f"[dim]Resume: {ticker} decision already exists; skipping.[/dim]")
             continue
         selections = dict(shared_selections)
+        selections["paper_run_id"] = run.id
         asset_type = detect_asset_type(ticker)
         selections["ticker"] = ticker
         selections["asset_type"] = asset_type.value
