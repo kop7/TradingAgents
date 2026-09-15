@@ -104,6 +104,42 @@ def test_price_selection_uses_next_open_and_latest_close():
     )
 
 
+def test_pending_open_retains_plan_and_retry_executes_once(tmp_path):
+    repo = PaperRepository(tmp_path / "waiting.sqlite")
+    account = repo.create_account("waiting", 100)
+    run, _ = repo.create_run(
+        account.id, run_key="waiting", analysis_date="2026-01-02", symbols=["HON", "UEC"],
+    )
+    for symbol in ("HON", "UEC"):
+        decision = repo.save_decision(
+            run.id, symbol=symbol, analysis_date="2026-01-02", rating="BUY", raw_decision_text="Buy",
+        )
+        repo.create_order(decision.id, account.id, client_order_key=symbol,
+                          symbol=symbol, side="BUY", notional=20)
+    service = PersistentPaperService(
+        repo, slippage_bps=0,
+        price_loader=lambda symbol, date: _prices().iloc[:1] if symbol == "HON" else _prices(),
+    )
+    result = service.execute_pending(account.id, as_of_date="2026-01-05")
+    assert result.errors == () and len(result.waiting) == 1 and result.fills == ()
+    assert repo.get_balance(account.id) == 100
+    assert len(repo.list_pending_orders(account.id, as_of_date="2026-01-05")) == 2
+    service.price_loader = _prices
+    assert len(service.execute_pending(account.id, as_of_date="2026-01-05").fills) == 2
+    assert service.execute_pending(account.id, as_of_date="2026-01-05").fills == ()
+    assert repo.get_balance(account.id) == 60
+
+
+def test_invalid_open_is_still_a_data_error():
+    from tradingagents.paper.prices import MarketOpenPending, PriceUnavailableError
+
+    frame = _prices()
+    frame.loc[1, "Open"] = 0
+    with pytest.raises(PriceUnavailableError) as error:
+        first_open_after_decision(frame, decision_date="2026-01-02", as_of_date="2026-01-05")
+    assert not isinstance(error.value, MarketOpenPending)
+
+
 @pytest.mark.unit
 def test_allocator_is_order_independent_and_sells_before_buys():
     inputs = [

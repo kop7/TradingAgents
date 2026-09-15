@@ -9,6 +9,32 @@ import cli.main as cli_main
 from cli.models import AnalystType
 
 
+def test_waiting_account_does_not_start_new_analysis(capsys):
+    account = SimpleNamespace(
+        id=1, name="matija", status="ACTIVE", strategy_config_json="{}", benchmark_symbol="URA",
+    )
+    repo = mock.Mock()
+    repo.get_account.return_value = account
+    repo.get_balance.return_value = 1000
+    service = mock.Mock()
+    service.execute_pending.return_value = SimpleNamespace(
+        errors=(), fills=(), waiting=("HON: waiting for market Open",),
+    )
+    with (
+        mock.patch.object(cli_main, "PaperRepository", return_value=repo),
+        mock.patch.object(cli_main, "PersistentPaperService", return_value=service),
+        mock.patch.object(cli_main, "_display_persistent_account"),
+        mock.patch.object(cli_main, "_run_selected_analysis") as analyze,
+    ):
+        cli_main.run_persistent_paper_batch(
+            ["HON"], {"analysis_date": "2026-09-15"}, False, account_name="matija",
+        )
+    analyze.assert_not_called()
+    repo.create_run.assert_not_called()
+    service.build_and_store_plan.assert_not_called()
+    assert "Waiting for market data" in capsys.readouterr().out
+
+
 def test_account_creation_and_bulk_import_are_idempotent(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
@@ -53,7 +79,7 @@ def test_resume_skips_successful_ticker_and_retries_failed_ticker(status):
         SimpleNamespace(symbol="MSFT", status="FAILED"),
     )
     service = mock.Mock()
-    service.execute_pending.return_value = SimpleNamespace(fills=(), errors=())
+    service.execute_pending.return_value = SimpleNamespace(fills=(), errors=(), waiting=())
     service.snapshot.return_value = SimpleNamespace(snapshot_id=1, errors=())
     service.build_and_store_plan.return_value = SimpleNamespace(orders=(), projected_cash=1000)
     with (
@@ -268,7 +294,7 @@ def test_all_connection_failures_stop_without_creating_orders_or_raising():
     repo.create_run.return_value = (run, True)
     repo.get_decisions.side_effect = [(), (SimpleNamespace(status="FAILED"),)]
     service = mock.Mock()
-    service.execute_pending.return_value = SimpleNamespace(fills=(), errors=())
+    service.execute_pending.return_value = SimpleNamespace(fills=(), errors=(), waiting=())
     service.snapshot.return_value = SimpleNamespace(snapshot_id=1, errors=())
 
     with (

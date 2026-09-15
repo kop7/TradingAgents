@@ -14,6 +14,10 @@ class PriceUnavailableError(ValueError):
     """Raised when an OHLCV frame has no usable bar for the requested rule."""
 
 
+class MarketOpenPending(PriceUnavailableError):
+    """Loaded data has no bar in the execution window yet; retry later."""
+
+
 @dataclass(frozen=True)
 class PricePoint:
     market_date: date
@@ -76,7 +80,7 @@ def first_open_after_decision(
     rows = _normalized_rows(data)
     candidates = rows[(rows["_market_date"] > decision) & (rows["_market_date"] <= as_of)]
     if candidates.empty:
-        raise PriceUnavailableError("No market open exists after decision_date through as_of_date")
+        raise MarketOpenPending("No market open exists after decision_date through as_of_date")
     return _point(candidates.iloc[0], "Open")
 
 

@@ -1589,9 +1589,18 @@ def run_persistent_paper_batch(
     executed = service.execute_pending(account.id, as_of_date=analysis_date)
     if executed.errors:
         raise ValueError(
-            "Pending orders were not executed because a D+1 Open price is missing: "
+            "Pending orders could not be executed due to a data error: "
             + "; ".join(executed.errors)
         )
+    if executed.waiting:
+        console.print("[yellow]Waiting for market data:[/yellow] " + "; ".join(executed.waiting))
+        console.print(
+            "[yellow]Orders remain PENDING. This account's next analysis and allocation "
+            "are deferred until the existing plan can execute. Retry when Open data "
+            "is available. Other selected accounts will continue.[/yellow]"
+        )
+        _display_persistent_account(repo, account)
+        return
     for fill in executed.fills:
         console.print(
             f"[green]Filled[/green] {fill.side} {fill.symbol}: "

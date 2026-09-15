@@ -15,6 +15,7 @@ from tradingagents.paper.allocator import (
 )
 from tradingagents.paper.money import micros_to_money, nanos_to_quantity
 from tradingagents.paper.prices import (
+    MarketOpenPending,
     PriceUnavailableError,
     fetch_first_open_after_decision,
     fetch_valuation_close,
@@ -26,6 +27,7 @@ from tradingagents.paper.repository import PaperRepository
 class PendingExecutionResult:
     fills: tuple
     errors: tuple[str, ...]
+    waiting: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class PersistentPaperService:
             return PendingExecutionResult((), ())
         executions = []
         errors = []
+        waiting = []
         for order in pending:
             try:
                 point = fetch_first_open_after_decision(
@@ -78,12 +81,17 @@ class PersistentPaperService:
                         "market_date": point.market_date.isoformat(),
                     }
                 )
+            except MarketOpenPending:
+                waiting.append(
+                    f"{order['symbol']}: waiting for market Open after "
+                    f"{order['analysis_date']} through {as_of_date}"
+                )
             except (PriceUnavailableError, ValueError) as exc:
                 errors.append(f"{order['symbol']}: {exc}")
         # A portfolio plan is one unit. If one required price is missing, retain
         # every order as PENDING so a retry cannot create a partial allocation.
-        if errors:
-            return PendingExecutionResult((), tuple(errors))
+        if errors or waiting:
+            return PendingExecutionResult((), tuple(errors), tuple(waiting))
         executed_at = max(item["market_date"] for item in executions) + "T09:30:00"
         fills = self.repository.execute_orders_atomically(
             account_id,

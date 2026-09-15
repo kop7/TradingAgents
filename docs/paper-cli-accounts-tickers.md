@@ -96,6 +96,13 @@ tradingagents paper symbols resume CCJ
 
 ## 4. Pokretanje i preskakanje obrađenih tickera
 
+Ako za raniji PENDING nalog još nema tržišnog zapisa nakon datuma odluke,
+CLI prikazuje **Waiting for market data**. Cijeli postojeći plan ostaje PENDING
+bez promjene salda. Nova analiza i alokacija tog računa odgađaju se kako ne bi
+koristile kapital namijenjen postojećim nalozima. Ostali odabrani računi nastavljaju
+obradu. Ponovi pokretanje kad Open podatak bude dostupan. Neispravne cijene i
+stvarne greške podataka i dalje se prijavljuju kao greške.
+
 ```bash
 dkc -f docker-compose.override.yml --profile ollama run --rm tradingagents-ollama
 ```
