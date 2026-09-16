@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="2fc3bcf2-04e5-4f40-a39b-a7d431e5cf32" name="Changes" comment="update">
+      <change afterPath="$PROJECT_DIR$/docs/analysis-reports-database.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/test_report_database.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tradingagents/paper/report_schema.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cli/database.py" beforeDir="false" afterPath="$PROJECT_DIR$/cli/database.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cli/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/cli/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/paper-trading-sql-queries.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/paper-trading-sql-queries.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_mysql_paper.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_mysql_paper.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_persistent_paper.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_persistent_paper.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tradingagents/paper/database.py" beforeDir="false" afterPath="$PROJECT_DIR$/tradingagents/paper/database.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tradingagents/paper/mysql_schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/tradingagents/paper/mysql_schema.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tradingagents/paper/repository.py" beforeDir="false" afterPath="$PROJECT_DIR$/tradingagents/paper/repository.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tradingagents/reporting.py" beforeDir="false" afterPath="$PROJECT_DIR$/tradingagents/reporting.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ComposerSettings">
+    <execution>
+      <executable />
+    </execution>
+  </component>
+  <component name="DatabaseLocalColorSettings">
+    <colors>
+      <entry key="083cec2b-1c84-40f1-98b8-d7b297611884" value="" />
+      <entry key="bbb94038-cccf-4071-909b-b633dcbf2e31" value="" />
+      <entry key="f8102fc5-4518-458b-a6bd-aa9f372d2898" value="" />
+    </colors>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;kop7&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;git@github.com:kop7/TradingAgents.git&quot;,
+    &quot;accountId&quot;: &quot;5a0e530f-0bf6-42c4-bbda-af6e8186e90c&quot;
+  }
+}</component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.084202105222562" />
+      <entry key="MS500" value="1.632791094066321" />
+      <entry key="S2" value="2.2737439782921083" />
+      <entry key="S5" value="2.637961075751232" />
+      <entry key="S10" value="2.8039586129159506" />
+      <entry key="S30" value="2.930960967251024" />
+      <entry key="S60" value="2.965149275334571" />
+      <entry key="M2" value="3.041926390013597" />
+      <entry key="M5" value="5.314636893504498" />
+      <entry key="M10" value="11.041435269685532" />
+      <entry key="M15" value="15.424162016070081" />
+      <entry key="M30" value="24.309872528307608" />
+      <entry key="H1" value="35.00150949700252" />
+      <entry key="H2" value="44.90738935881478" />
+      <entry key="H4" value="51.94737215227598" />
+      <entry key="D1" value="59.32563093746214" />
+      <entry key="W1" value="60.756361239412726" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="2.4850521553492222E-170" />
+      <entry key="S5" value="1.4392432562441372E-68" />
+      <entry key="S10" value="1.199684648665697E-34" />
+      <entry key="S30" value="4.9319920423248704E-12" />
+      <entry key="S60" value="2.220808871182945E-6" />
+      <entry key="M2" value="0.001490237857251236" />
+      <entry key="M5" value="0.07401308248374593" />
+      <entry key="M10" value="0.2734620771092077" />
+      <entry key="M15" value="0.43557482970534767" />
+      <entry key="M30" value="0.8245364130124608" />
+      <entry key="H1" value="1.3986045119375905" />
+      <entry key="H2" value="1.9865389154231872" />
+      <entry key="H4" value="2.423145181249741" />
+      <entry key="D1" value="2.892221444115458" />
+      <entry key="W1" value="2.9842894751766558" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.047270201331271" />
+      <entry key="MS500" value="1.6215125821336909" />
+      <entry key="S2" value="2.2698072920862185" />
+      <entry key="S5" value="2.6361332140309304" />
+      <entry key="S10" value="2.8029870032893194" />
+      <entry key="S30" value="2.930622388917664" />
+      <entry key="S60" value="2.964979869355179" />
+      <entry key="M2" value="3.0432573946534434" />
+      <entry key="M5" value="5.387363218930356" />
+      <entry key="M10" value="11.31257668047015" />
+      <entry key="M15" value="15.857317268963477" />
+      <entry key="M30" value="25.132408967182" />
+      <entry key="H1" value="36.398725444881066" />
+      <entry key="H2" value="46.893073714125656" />
+      <entry key="H4" value="54.37003590810828" />
+      <entry key="D1" value="62.21776293855445" />
+      <entry key="W1" value="63.740637685225934" />
+    </decayedShown>
+  </component>
+  <component name="PhpWorkspaceProjectConfiguration" interpreter_name="/bin/php" />
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 4
+}</component>
+  <component name="ProjectId" id="3IRR59xsTR3TtpKEK5Iu0J0Hn3F" />
+  <component name="ProjectViewState">
+    <option name="autoscrollFromSource" value="true" />
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;dart.analysis.tool.window.visible&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;feature/auto-trade&quot;,
+    &quot;git.auto.fetch.suggestion.counter&quot;: &quot;3&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/mkop/PhpstormProjects/moduloy-dev-env&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
+  },
+  &quot;keyToStringList&quot;: {
+    &quot;DatabaseDriversLRU&quot;: [
+      &quot;mysql&quot;,
+      &quot;postgresql&quot;,
+      &quot;sqlite&quot;
+    ]
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+      <recent name="$PROJECT_DIR$/.codex" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-php-predefined-a98d8de5180a-9522f28f0b20-com.jetbrains.php.sharedIndexes-PS-262.10315.130" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="2fc3bcf2-04e5-4f40-a39b-a7d431e5cf32" name="Changes" comment="add paper_trading" />
+      <created>1787725210776</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1787725210776</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
+    <option name="CHECK_NEW_TODO" value="false" />
+    <MESSAGE value="git add save report" />
+    <MESSAGE value="add AGENTS.md" />
+    <MESSAGE value="add paper_trading" />
+    <MESSAGE value="update redit" />
+    <MESSAGE value="add docs" />
+    <MESSAGE value="add trading paper" />
+    <MESSAGE value="add trading paper new update" />
+    <MESSAGE value="update" />
+    <option name="LAST_COMMIT_MESSAGE" value="update" />
+  </component>
+</project>

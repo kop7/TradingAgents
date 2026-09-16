@@ -1,11 +1,15 @@
 import datetime
+import json
 import os
+import re
 import sys
 import time
 from collections import deque
 from functools import wraps
 from pathlib import Path
+from uuid import uuid4
 
+import questionary
 import typer
 from rich import box
 from rich.align import Align
@@ -20,6 +24,8 @@ from rich.table import Table
 from rich.text import Text
 
 from cli.announcements import display_announcements, fetch_announcements
+from cli.database import database_app
+from cli.paper import paper_app
 from cli.stats_handler import StatsCallbackHandler
 from cli.utils import (
     ask_anthropic_effort,
@@ -33,6 +39,8 @@ from cli.utils import (
     detect_asset_type,
     ensure_api_key,
     get_ticker,
+    is_valid_ticker_input,
+    normalize_ticker_symbol,
     prompt_openai_compatible_url,
     resolve_backend_url,
     select_analysts,
@@ -41,6 +49,7 @@ from cli.utils import (
     select_research_depth,
     select_shallow_thinking_agent,
 )
+from tradingagents.agents.utils.rating import parse_rating
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
@@ -49,7 +58,14 @@ from tradingagents.graph.analyst_execution import (
     sync_analyst_tracker_from_chunk,
 )
 from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.reporting import write_report_tree
+from tradingagents.paper import PaperRepository
+from tradingagents.paper.allocator import AllocationPolicy
+from tradingagents.paper.connection import configured_database
+from tradingagents.paper.money import micros_to_money, nanos_to_quantity
+from tradingagents.paper.prices import fetch_valuation_close
+from tradingagents.paper.service import PersistentPaperService
+from tradingagents.paper_trading import PaperPortfolio, fetch_execution_price
+from tradingagents.reporting import render_reports, write_report_tree
 
 console = Console()
 
@@ -70,6 +86,15 @@ app = typer.Typer(
     help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
     add_completion=True,  # Enable shell completion
 )
+app.add_typer(paper_app, name="paper")
+app.add_typer(database_app, name="db")
+
+
+@app.callback(invoke_without_command=True)
+def app_entrypoint(ctx: typer.Context) -> None:
+    """Keep the original no-argument interactive workflow alongside subcommands."""
+    if ctx.invoked_subcommand is None:
+        analyze()
 
 
 # Create a deque to store recent messages with a maximum length
@@ -492,7 +517,7 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
-def get_user_selections():
+def get_user_selections(selected_ticker: str | None = None):
     """Get all user selections before starting the analysis display."""
     # Display ASCII art welcome message
     with open(Path(__file__).parent / "static" / "welcome.txt", encoding="utf-8") as f:
@@ -503,9 +528,6 @@ def get_user_selections():
     welcome_content += "[bold green]TradingAgents: Multi-Agents LLM Financial Trading Framework - CLI[/bold green]\n\n"
     welcome_content += "[bold]Workflow Steps:[/bold]\n"
     welcome_content += "I. Analyst Team → II. Research Team → III. Trader → IV. Risk Management → V. Portfolio Management\n\n"
-    welcome_content += (
-        "[dim]Built by [Tauric Research](https://github.com/TauricResearch)[/dim]"
-    )
 
     # Create and center the welcome box
     welcome_box = Panel(
@@ -545,15 +567,25 @@ def get_user_selections():
         console.print(create_question_box(box_title, box_body))
         return prompt_fn()
 
-    # Step 1: Ticker symbol
-    console.print(
-        create_question_box(
-            "Step 1: Ticker Symbol",
-            "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
-            "SPY",
+    # Step 1: Ticker symbol. Paper mode supplies the first watchlist symbol so
+    # provider/model/analyst settings are collected only once for the batch.
+    if selected_ticker is None:
+        console.print(
+            create_question_box(
+                "Step 1: Ticker Symbol",
+                "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
+                "SPY",
+            )
         )
-    )
-    selected_ticker = get_ticker()
+        selected_ticker = get_ticker()
+    else:
+        console.print(
+            create_question_box(
+                "Step 1: Paper Trading Watchlist",
+                "The watchlist is configured; choose shared analysis settings for the batch",
+                selected_ticker,
+            )
+        )
     asset_type = detect_asset_type(selected_ticker)
     # Only announce when it's not the default stock path, to avoid printing
     # "stock" on every run.
@@ -763,6 +795,53 @@ def get_analysis_date():
 def save_report_to_disk(final_state, ticker: str, save_path: Path):
     """Save the complete analysis report to disk (shared CLI/API writer)."""
     return write_report_tree(final_state, ticker, save_path)
+
+
+def execute_paper_trade(final_state, ticker: str, trade_date: str, config: dict):
+    """Turn the final decision into one local virtual trade."""
+    decision = final_state.get("final_trade_decision") or final_state.get(
+        "risk_debate_state", {}
+    ).get("judge_decision", "")
+    if not decision:
+        raise ValueError("The analysis did not produce a final portfolio decision")
+
+    price = fetch_execution_price(ticker, trade_date)
+    portfolio = PaperPortfolio(
+        config["paper_db_path"],
+        initial_cash=config["paper_initial_cash"],
+        max_position_pct=config["paper_max_position_pct"],
+    )
+    result = portfolio.apply_decision(
+        symbol=ticker,
+        trade_date=trade_date,
+        decision_text=decision,
+        price=price,
+    )
+    return portfolio, result
+
+
+def display_paper_portfolio(portfolio: PaperPortfolio, result) -> None:
+    """Display the latest virtual trade and account state."""
+    snapshot = portfolio.snapshot()
+    duplicate = " (already processed)" if result.duplicate else ""
+    console.print(
+        f"\n[bold cyan]Paper trading:[/bold cyan] {result.decision} → "
+        f"{result.side}{duplicate} at ${result.price:,.2f}"
+    )
+    console.print(f"[dim]{result.message}[/dim]")
+
+    table = Table(title="Virtual portfolio", box=box.SIMPLE_HEAVY)
+    table.add_column("Cash", justify="right")
+    table.add_column("Positions", justify="right")
+    table.add_column("Total", justify="right")
+    table.add_column("Return", justify="right")
+    table.add_row(
+        f"${snapshot.cash:,.2f}",
+        f"${snapshot.market_value:,.2f}",
+        f"${snapshot.total_equity:,.2f}",
+        f"{snapshot.total_return:+.2%}",
+    )
+    console.print(table)
 
 
 def display_complete_report(final_state):
@@ -1001,11 +1080,21 @@ def _build_run_config(selections: dict, checkpoint: bool | None) -> dict:
     return config
 
 
-def run_analysis(checkpoint: bool | None = None):
-    # First get all user selections
-    selections = get_user_selections()
-
+def _run_selected_analysis(
+    selections: dict,
+    checkpoint: bool | None = None,
+    *,
+    paper_trading: bool = False,
+    prompt_for_report: bool = True,
+):
+    global message_buffer
+    # Each batch item gets a fresh buffer; otherwise the logging decorators from
+    # a previous ticker would remain wrapped and write into the wrong report.
+    message_buffer = MessageBuffer()
     config = _build_run_config(selections, checkpoint)
+    config["paper_trading_enabled"] = paper_trading
+    # Check connectivity/schema before starting potentially expensive LLM work.
+    report_repo = PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()
@@ -1256,6 +1345,11 @@ def run_analysis(checkpoint: bool | None = None):
     # Post-analysis actions (outside Live context for clean interaction)
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
     console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
+    report_repo.save_reports(
+        selections["ticker"], selections["analysis_date"],
+        render_reports(final_state, selections["ticker"]),
+        run_id=selections.get("paper_run_id"), execution_key=f"single:{uuid4()}",
+    )
     # Automatically save report
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     save_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
@@ -1267,10 +1361,443 @@ def run_analysis(checkpoint: bool | None = None):
     except Exception as e:
         console.print(f"[red]Error saving report: {e}[/red]")
 
+    if config.get("paper_trading_enabled", False):
+        try:
+            portfolio, trade_result = execute_paper_trade(
+                final_state,
+                selections["ticker"],
+                selections["analysis_date"],
+                config,
+            )
+            portfolio.write_snapshot(save_path / "paper_portfolio.json")
+            display_paper_portfolio(portfolio, trade_result)
+        except Exception as e:
+            console.print(f"[red]Paper trade could not be processed: {e}[/red]")
+
     # Prompt to display full report
-    display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
-    if display_choice in ("Y", "YES", ""):
-        display_complete_report(final_state)
+    if prompt_for_report:
+        display_choice = typer.prompt(
+            "\nDisplay full report on screen?", default="Y"
+        ).strip().upper()
+        if display_choice in ("Y", "YES", ""):
+            display_complete_report(final_state)
+
+    # The persistent paper workflow analyzes every ticker first, then performs
+    # one portfolio-aware allocation pass. Returning the completed state keeps
+    # Single analysis behavior unchanged while allowing the batch dispatcher to
+    # defer all cash/position mutations until every candidate is known.
+    return {
+        "final_state": final_state,
+        "save_path": save_path,
+        "config": config,
+    }
+
+
+def select_workflow_mode() -> str:
+    """Choose between the original single analysis and watchlist paper trading."""
+    choice = questionary.select(
+        "Choose how TradingAgents should run:",
+        choices=[
+            questionary.Choice(
+                "Single analysis — analyze one ticker without virtual trading",
+                value="analysis",
+            ),
+            questionary.Choice(
+                "Paper trading — analyze a watchlist and trade the virtual portfolio",
+                value="paper_trading",
+            ),
+            questionary.Choice(
+                "Paper trading — use tickers from database",
+                value="paper_trading_db",
+            ),
+        ],
+        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        style=questionary.Style(
+            [
+                ("selected", "fg:green noinherit"),
+                ("highlighted", "fg:green noinherit"),
+                ("pointer", "fg:green noinherit"),
+            ]
+        ),
+    ).ask()
+    if choice is None:
+        console.print("\n[red]No workflow selected. Exiting...[/red]")
+        raise typer.Exit(code=1)
+    return choice
+
+
+def parse_watchlist(raw: str) -> list[str]:
+    """Normalize a comma/space/newline-separated ticker watchlist."""
+    tokens = [token for token in re.split(r"[,\s]+", raw.strip()) if token]
+    if not tokens:
+        raise ValueError("Enter at least one ticker symbol.")
+
+    invalid = [token for token in tokens if not is_valid_ticker_input(token)]
+    if invalid:
+        raise ValueError(f"Invalid ticker symbol(s): {', '.join(invalid)}")
+
+    # Preserve the user's order while preventing duplicate analyses/orders.
+    tickers = []
+    seen = set()
+    for token in tokens:
+        ticker = normalize_ticker_symbol(token)
+        if ticker not in seen:
+            tickers.append(ticker)
+            seen.add(ticker)
+    return tickers
+
+
+def get_paper_watchlist() -> list[str]:
+    """Prompt for any number of symbols to process as one paper-trading batch."""
+    raw = questionary.text(
+        "Enter paper-trading tickers, separated by commas:",
+        instruction="Example: AAPL, MSFT, NVDA, AMZN, META",
+        validate=lambda value: _watchlist_error(value) or True,
+        style=questionary.Style(
+            [("text", "fg:green"), ("highlighted", "noinherit")]
+        ),
+    ).ask()
+    if raw is None:
+        console.print("\n[red]No watchlist provided. Exiting...[/red]")
+        raise typer.Exit(code=1)
+    return parse_watchlist(raw)
+
+
+def get_paper_database_watchlist() -> list[str]:
+    repo = PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
+    tickers = [item.symbol for item in repo.list_instruments(active_only=True)]
+    if not tickers:
+        console.print(
+            "[yellow]No active paper tickers in the database. "
+            "Add them with: tradingagents paper symbols add AAPL MSFT[/yellow]"
+        )
+        raise typer.Exit(code=1)
+    console.print(f"[cyan]Database tickers:[/cyan] {', '.join(tickers)}")
+    return tickers
+
+
+def _watchlist_error(raw: str) -> str | None:
+    try:
+        parse_watchlist(raw)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def _persistent_paper_policy(account) -> AllocationPolicy:
+    """Load the immutable allocation settings stored with one experiment."""
+    stored = json.loads(account.strategy_config_json or "{}")
+    return AllocationPolicy(
+        fixed_buy_amount=stored.get("buy_notional", DEFAULT_CONFIG["paper_buy_notional"]),
+        fixed_overweight_amount=stored.get(
+            "overweight_notional", DEFAULT_CONFIG["paper_overweight_notional"]
+        ),
+        max_position_pct=stored.get(
+            "max_position_pct", DEFAULT_CONFIG["paper_max_position_pct"]
+        ),
+        cash_reserve_pct=stored.get(
+            "cash_reserve_pct", DEFAULT_CONFIG["paper_cash_reserve_pct"]
+        ),
+    )
+
+
+def _display_persistent_account(repo: PaperRepository, account) -> None:
+    table = Table(title=f"Paper account — {account.name}", box=box.SIMPLE_HEAVY)
+    table.add_column("Ticker")
+    table.add_column("Quantity", justify="right")
+    table.add_column("Average", justify="right")
+    table.add_column("Last", justify="right")
+    table.add_column("Value", justify="right")
+    for position in repo.get_positions(account.id):
+        quantity = nanos_to_quantity(position.quantity_nanos)
+        last = micros_to_money(position.last_price_micros)
+        table.add_row(
+            position.symbol,
+            f"{quantity:.6f}",
+            f"${micros_to_money(position.average_cost_micros):,.4f}",
+            f"${last:,.4f}",
+            f"${quantity * last:,.2f}",
+        )
+    console.print(f"[bold]Cash:[/bold] ${repo.get_balance(account.id):,.2f}")
+    console.print(table)
+
+
+def select_paper_accounts() -> list[str]:
+    repo = PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
+    accounts = [account for account in repo.list_accounts() if account.status == "ACTIVE"]
+    if not accounts:
+        console.print(
+            "[yellow]No active paper accounts. Create one with: "
+            "tradingagents paper account-create --name default --cash 1000[/yellow]"
+        )
+        raise typer.Exit(code=1)
+    selected = questionary.checkbox(
+        "Select accounts for Paper trading:",
+        choices=[
+            questionary.Choice(
+                f"{account.name} — {repo.get_balance(account.id):,.2f} {account.currency}",
+                value=account.name,
+            )
+            for account in accounts
+        ],
+        instruction="Space: select/unselect accounts; Enter: start with selected accounts",
+        validate=lambda values: bool(values) or "Select at least one account.",
+    ).ask()
+    if not selected:
+        console.print("[yellow]No accounts selected. Exiting.[/yellow]")
+        raise typer.Exit(code=1)
+    return selected
+
+
+def run_persistent_paper_batch(
+    tickers: list[str], shared_selections: dict, checkpoint: bool | None,
+    *, account_name: str | None = None,
+) -> None:
+    """Run one resumable, portfolio-aware paper experiment for a watchlist."""
+    strategy_config = {
+        "buy_notional": DEFAULT_CONFIG["paper_buy_notional"],
+        "overweight_notional": DEFAULT_CONFIG["paper_overweight_notional"],
+        "max_position_pct": DEFAULT_CONFIG["paper_max_position_pct"],
+        "cash_reserve_pct": DEFAULT_CONFIG["paper_cash_reserve_pct"],
+        "slippage_bps": DEFAULT_CONFIG["paper_slippage_bps"],
+    }
+    repo = PaperRepository(configured_database(DEFAULT_CONFIG["paper_db_path"]))
+    account = repo.get_account(account_name) if account_name is not None else repo.get_or_create_account(
+        DEFAULT_CONFIG["paper_account_name"],
+        DEFAULT_CONFIG["paper_initial_cash"],
+        strategy_config=strategy_config,
+        benchmark_symbol=DEFAULT_CONFIG["paper_benchmark_symbol"],
+    )
+    if account.status != "ACTIVE":
+        raise ValueError(f"Paper account {account.name!r} is {account.status}, not ACTIVE")
+
+    policy = _persistent_paper_policy(account)
+    stored_config = json.loads(account.strategy_config_json or "{}")
+    service = PersistentPaperService(
+        repo,
+        policy=policy,
+        slippage_bps=stored_config.get(
+            "slippage_bps", DEFAULT_CONFIG["paper_slippage_bps"]
+        ),
+    )
+    analysis_date = shared_selections["analysis_date"]
+    console.print(
+        f"[bold cyan]Account:[/bold cyan] {account.name} (ID {account.id}) — "
+        f"cash ${repo.get_balance(account.id):,.2f}"
+    )
+
+    executed = service.execute_pending(account.id, as_of_date=analysis_date)
+    if executed.errors:
+        raise ValueError(
+            "Pending orders could not be executed due to a data error: "
+            + "; ".join(executed.errors)
+        )
+    if executed.waiting:
+        console.print("[yellow]Waiting for market data:[/yellow] " + "; ".join(executed.waiting))
+        console.print(
+            "[yellow]Orders remain PENDING. This account's next analysis and allocation "
+            "are deferred until the existing plan can execute. Retry when Open data "
+            "is available. Other selected accounts will continue.[/yellow]"
+        )
+        _display_persistent_account(repo, account)
+        return
+    for fill in executed.fills:
+        console.print(
+            f"[green]Filled[/green] {fill.side} {fill.symbol}: "
+            f"{nanos_to_quantity(fill.quantity_nanos):.6f} @ "
+            f"${micros_to_money(fill.effective_price_micros):,.4f}"
+        )
+
+    valuation = service.snapshot(
+        account.id,
+        valuation_date=analysis_date,
+        benchmark_symbol=account.benchmark_symbol,
+    )
+    if valuation.snapshot_id == 0:
+        raise ValueError(
+            "Existing positions could not be valued: " + "; ".join(valuation.errors)
+        )
+    for warning in valuation.errors:
+        console.print(f"[yellow]Valuation warning: {warning}[/yellow]")
+
+    run, created = repo.create_run(
+        account.id,
+        run_key=f"daily:{analysis_date}",
+        analysis_date=analysis_date,
+        symbols=tickers,
+        config={"watchlist": tickers, "strategy": stored_config},
+    )
+    saved_decisions = repo.get_decisions(run.id)
+    completed_symbols = {
+        decision.symbol for decision in saved_decisions if decision.status == "COMPLETED"
+    }
+    if not created and run.status == "COMPLETED" and set(tickers) <= completed_symbols:
+        console.print(
+            f"[yellow]Daily run {analysis_date} is already complete; no duplicate "
+            "analysis or orders were created.[/yellow]"
+        )
+        _display_persistent_account(repo, account)
+        return
+
+    repo.set_run_status(run.id, "ANALYZING")
+    failures: list[tuple[str, str]] = []
+    for index, ticker in enumerate(tickers, start=1):
+        if ticker in completed_symbols:
+            console.print(f"[dim]Resume: {ticker} decision already exists; skipping.[/dim]")
+            continue
+        selections = dict(shared_selections)
+        selections["paper_run_id"] = run.id
+        asset_type = detect_asset_type(ticker)
+        selections["ticker"] = ticker
+        selections["asset_type"] = asset_type.value
+        if asset_type.value == "crypto":
+            selections["analysts"] = [
+                analyst
+                for analyst in shared_selections["analysts"]
+                if analyst.value != "fundamentals"
+            ]
+
+        console.print(Rule(f"Paper Trading {index}/{len(tickers)} — {ticker}", style="bold cyan"))
+        try:
+            result = _run_selected_analysis(
+                selections,
+                checkpoint=checkpoint,
+                paper_trading=False,
+                prompt_for_report=False,
+            )
+            decision_text = str(
+                result["final_state"].get("final_trade_decision")
+                or result["final_state"].get("risk_debate_state", {}).get(
+                    "judge_decision", ""
+                )
+            )
+            if not decision_text:
+                raise ValueError("analysis did not produce a final portfolio decision")
+            price = fetch_valuation_close(ticker, valuation_date=analysis_date)
+            price_snapshot_id = repo.record_price(
+                ticker,
+                purpose="DECISION",
+                field="CLOSE",
+                price=price.price,
+                market_date=price.market_date.isoformat(),
+            )
+            repo.save_decision(
+                run.id,
+                symbol=ticker,
+                analysis_date=analysis_date,
+                rating=parse_rating(decision_text).upper(),
+                raw_decision_text=decision_text,
+                reference_price=price.price,
+                price_as_of=price.market_date.isoformat(),
+                price_snapshot_id=price_snapshot_id,
+                report_path=str(result["save_path"] / "complete_report.md"),
+            )
+        except KeyboardInterrupt:
+            repo.set_run_status(run.id, "PARTIAL_ANALYSIS")
+            raise
+        except Exception as exc:
+            error = str(exc)
+            failures.append((ticker, error))
+            repo.save_decision(
+                run.id,
+                symbol=ticker,
+                analysis_date=analysis_date,
+                rating="HOLD",
+                raw_decision_text="",
+                status="FAILED",
+                error_text=error,
+            )
+            console.print(f"[red]Analysis failed for {ticker}: {error}[/red]")
+
+    if not any(decision.status == "COMPLETED" for decision in repo.get_decisions(run.id)):
+        repo.set_run_status(run.id, "FAILED", "No ticker analysis completed")
+        console.print(
+            "\n[red]Paper run stopped safely: no ticker analysis completed, so "
+            "no allocation or orders were created.[/red]"
+        )
+        console.print(
+            "[yellow]Check the LLM/network connection and rerun the same account, "
+            "watchlist and date. Failed tickers will be attempted again.[/yellow]"
+        )
+        _display_persistent_account(repo, account)
+        return
+
+    plan = service.build_and_store_plan(account.id, run.id)
+    table = Table(title="Orders scheduled for next market Open", box=box.SIMPLE_HEAVY)
+    for heading in ("Ticker", "Rating", "Status", "Side", "Notional", "Reason"):
+        table.add_column(heading, justify="right" if heading == "Notional" else "left")
+    for order in plan.orders:
+        table.add_row(
+            order.symbol,
+            order.decision,
+            order.status.value,
+            order.side.value if order.side else "—",
+            f"${order.notional:,.2f}",
+            order.reason,
+        )
+    console.print(table)
+    console.print(f"[bold]Projected cash after pending orders:[/bold] ${plan.projected_cash:,.2f}")
+
+    final_snapshot = service.snapshot(
+        account.id,
+        valuation_date=analysis_date,
+        source_run_id=run.id,
+        benchmark_symbol=account.benchmark_symbol,
+    )
+    if final_snapshot.snapshot_id == 0:
+        repo.set_run_status(run.id, "FAILED", "; ".join(final_snapshot.errors))
+        raise ValueError("Final snapshot failed: " + "; ".join(final_snapshot.errors))
+    repo.set_run_status(
+        run.id,
+        "PARTIAL_ANALYSIS" if failures else "COMPLETED",
+        "; ".join(error for _, error in failures) if failures else None,
+    )
+    console.print(
+        f"\n[bold green]Paper run complete:[/bold green] "
+        f"{len(tickers) - len(failures)}/{len(tickers)} analyses stored. "
+        "Planned trades remain PENDING until a later dated run can use the next Open."
+    )
+    _display_persistent_account(repo, account)
+
+
+def run_analysis(checkpoint: bool | None = None):
+    """Dispatch the explicitly selected CLI workflow."""
+    workflow = select_workflow_mode()
+    if workflow == "analysis":
+        selections = get_user_selections()
+        _run_selected_analysis(
+            selections,
+            checkpoint=checkpoint,
+            paper_trading=False,
+            prompt_for_report=True,
+        )
+        return
+
+    tickers = (
+        get_paper_database_watchlist()
+        if workflow == "paper_trading_db"
+        else get_paper_watchlist()
+    )
+    account_names = select_paper_accounts()
+    shared_selections = get_user_selections(selected_ticker=tickers[0])
+    console.print(
+        f"\n[bold cyan]Paper trading batch:[/bold cyan] "
+        f"{len(tickers)} ticker(s) across {len(account_names)} selected account(s)."
+    )
+
+    failed_accounts = []
+    for account_name in account_names:
+        console.print(Rule(f"Paper account — {account_name}", style="bold cyan"))
+        try:
+            run_persistent_paper_batch(
+                tickers, shared_selections, checkpoint, account_name=account_name,
+            )
+        except Exception as exc:
+            failed_accounts.append(account_name)
+            console.print(f"[red]Paper account {account_name} failed: {exc}[/red]")
+    if failed_accounts:
+        console.print(f"[red]Failed accounts: {', '.join(failed_accounts)}[/red]")
+        raise typer.Exit(code=1)
 
 
 @app.command()
