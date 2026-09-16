@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY pyproject.toml /tmp/pyproject.toml
+# Resolve only the UI extra and its shared SQL/env dependencies from the registry.
+RUN python -c 'import tomllib; p=tomllib.load(open("/tmp/pyproject.toml", "rb"))["project"]; print("\n".join(p["optional-dependencies"]["cockpit"] + [d for d in p["dependencies"] if d.startswith(("pymysql", "python-dotenv"))]))' > /tmp/admin-requirements.txt \
+    && pip install --no-cache-dir -r /tmp/admin-requirements.txt \
+    && useradd --create-home admin
+COPY tradingagents/__init__.py /app/tradingagents/__init__.py
+COPY tradingagents/paper /app/tradingagents/paper
+COPY tradingagents/cockpit /app/tradingagents/cockpit
+ENV PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=1
+USER admin
+EXPOSE 8501
+HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"
+CMD ["python", "-m", "streamlit", "run", "tradingagents/cockpit/app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true", "--browser.gatherUsageStats=false"]

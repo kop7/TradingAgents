@@ -1,0 +1,23 @@
+name: tradingagents-admin
+services:
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    ports:
+      - "127.0.0.1:8501:8501"
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: ${DB_HOST:?Postavi DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_DATABASE: ${DB_DATABASE:?Postavi DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME:?Postavi DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

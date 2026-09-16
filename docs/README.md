@@ -8,6 +8,7 @@ Ova dokumentacija opisuje **stvarno ponašanje trenutačne CLI implementacije** 
 - [Imam $1.000 — točne početničke upute](1000-dollars-start-here.md)
 - [SQL upiti za statistiku](paper-trading-sql-queries.md)
 - [Plan trajnog Paper trading računa i statistike](persistent-paper-trading-plan.md)
+- [Trading Cockpit — zaseban admin kontejner](cockpit.md)
 
 ## Najkraća razlika
 

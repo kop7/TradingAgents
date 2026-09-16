@@ -90,6 +90,19 @@ app.add_typer(paper_app, name="paper")
 app.add_typer(database_app, name="db")
 
 
+@app.command()
+def cockpit():
+    """Open the read-only Trading Cockpit on localhost:8501."""
+    from tradingagents.cockpit.launcher import launch
+
+    try:
+        code = launch()
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    raise typer.Exit(code)
+
+
 @app.callback(invoke_without_command=True)
 def app_entrypoint(ctx: typer.Context) -> None:
     """Keep the original no-argument interactive workflow alongside subcommands."""

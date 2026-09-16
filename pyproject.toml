@@ -35,6 +35,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+cockpit = [
+    "streamlit>=1.40,<2",
+]
 dev = [
     "ruff>=0.15",
     "pytest>=8.0",
