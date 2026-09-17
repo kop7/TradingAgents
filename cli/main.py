@@ -92,7 +92,7 @@ app.add_typer(database_app, name="db")
 
 @app.command()
 def cockpit():
-    """Open the read-only Trading Cockpit on localhost:8501."""
+    """Open the Trading Cockpit on localhost:8501."""
     from tradingagents.cockpit.launcher import launch
 
     try:

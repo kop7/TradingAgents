@@ -133,9 +133,12 @@ def reports(filters):
 def main():
     st.set_page_config(page_title="Trading Cockpit", page_icon="📊", layout="wide")
     st.title("Trading Cockpit")
-    st.caption("Lokalni pregled · samo čitanje · simulirano paper trgovanje")
+    st.caption("Lokalni cockpit · simulirano paper trgovanje")
     if st.sidebar.button("Osvježi"):
         load.clear()
+        for key in list(st.session_state):
+            if key.startswith("account_edit:"):
+                del st.session_state[key]
     try:
         accounts = load("accounts")
         names = {row["id"]: f"{row['name']} ({row['currency']})" for row in accounts}
@@ -146,8 +149,14 @@ def main():
         if start > end:
             st.error("Početni datum mora biti prije završnog.")
             return
-        pages = ["Izvještaji"] if account_id is None else ["Overview", "Analize", "Izvještaji"]
+        pages = (["Izvještaji"] if account_id is None else
+                 ["Overview", "Analize", "Izvještaji", "Postavke računa"])
         page = st.sidebar.radio("Ekran", pages)
+        if page == "Postavke računa":
+            from tradingagents.cockpit.settings import account_settings
+
+            account_settings(account_id, load)
+            return
         ticker = st.sidebar.text_input("Ticker (točan simbol)", disabled=page == "Overview").strip()
         statuses = ["", "CREATED", "VALUATING", "ANALYZING", "PARTIAL_ANALYSIS", "PLANNED",
                     "EXECUTING", "SNAPSHOTTED", "COMPLETED", "FAILED", "CANCELLED"]

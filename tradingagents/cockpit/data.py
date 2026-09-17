@@ -42,6 +42,22 @@ class CockpitData:
     def accounts(self):
         return self.rows("SELECT id, name, currency, status FROM accounts ORDER BY name")
 
+    def account_details(self, account_id):
+        rows = self.rows(
+            "SELECT a.id, a.name, a.currency, a.status, a.strategy_config_json, a.state_revision, "
+            "b.cash_micros FROM accounts a JOIN account_balances b ON b.account_id=a.id "
+            "WHERE a.id=?", [account_id],
+        )
+        if not rows:
+            raise LookupError("Račun ne postoji.")
+        return rows[0]
+
+    def deposits(self, account_id):
+        return self.rows(
+            "SELECT occurred_at, amount_micros, balance_after_micros FROM cash_ledger "
+            "WHERE account_id=? AND entry_type='DEPOSIT' ORDER BY id DESC LIMIT 20", [account_id],
+        )
+
     def curve(self, filters):
         return equity_curve(self.connection, filters.account_id,
                             start_date=filters.start, end_date=filters.end)

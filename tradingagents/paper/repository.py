@@ -250,6 +250,80 @@ class PaperRepository:
     def get_balance(self, account_id: int) -> Decimal:
         return micros_to_money(self.get_balance_micros(account_id))
 
+    @staticmethod
+    def _editable_account(connection, account_id):
+        account = connection.execute(
+            "SELECT * FROM accounts WHERE id = ?", (account_id,),
+        ).fetchone()
+        if account is None:
+            raise LookupError("Račun ne postoji.")
+        if account["status"] == "CLOSED":
+            raise ValueError("Zatvoreni račun nije moguće mijenjati.")
+        busy = connection.execute(
+            "SELECT id FROM analysis_runs WHERE account_id = ? "
+            "AND status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED') LIMIT 1", (account_id,),
+        ).fetchone()
+        pending = connection.execute(
+            "SELECT id FROM orders WHERE account_id = ? AND status = 'PENDING' LIMIT 1",
+            (account_id,),
+        ).fetchone()
+        if busy or pending:
+            raise ValueError("Račun ima nedovršen run ili PENDING nalog. "
+                             "Dovrši ga prije izmjene postavki ili uplate.")
+        return account
+
+    def update_account_settings(self, account_id, values, *, expected_revision):
+        """Merge validated settings under the same lock as paper executions."""
+        from tradingagents.paper.account_settings import validate_settings
+
+        validated = validate_settings(values)
+        with self.database.transaction() as connection:
+            account = self._editable_account(connection, account_id)
+            if int(account["state_revision"]) != expected_revision:
+                raise ValueError("Račun je u međuvremenu promijenjen. Osvježi prikaz i pokušaj ponovno.")
+            config = json.loads(account["strategy_config_json"] or "{}")
+            config.update(validated)
+            connection.execute(
+                "UPDATE accounts SET strategy_config_json = ?, state_revision = state_revision + 1, "
+                "updated_at = ? WHERE id = ?", (_json(config), _now(), account_id),
+            )
+
+    def deposit_cash(self, account_id, amount, *, idempotency_key):
+        """Append one virtual deposit. Retrying the same request never adds cash twice."""
+        from tradingagents.paper.account_settings import positive_amount_micros
+
+        amount_micros = positive_amount_micros(amount)
+        if not isinstance(idempotency_key, str) or not 1 <= len(idempotency_key) <= 200:
+            raise ValueError("Neispravan identifikator uplate.")
+        key = "deposit:" + idempotency_key
+        with self.database.transaction() as connection:
+            prior = connection.execute(
+                "SELECT * FROM cash_ledger WHERE account_id = ? AND idempotency_key = ?",
+                (account_id, key),
+            ).fetchone()
+            if prior is not None:
+                if prior["entry_type"] != "DEPOSIT" or int(prior["amount_micros"]) != amount_micros:
+                    raise ValueError("Ovaj identifikator već pripada drugoj uplati.")
+                return micros_to_money(int(prior["balance_after_micros"]))
+            self._editable_account(connection, account_id)
+            balance = int(connection.execute(
+                "SELECT cash_micros FROM account_balances WHERE account_id = ?", (account_id,),
+            ).fetchone()[0]) + amount_micros
+            if balance > 2**63 - 1:
+                raise ValueError("Saldo bi premašio podržani raspon.")
+            now = _now()
+            connection.execute(
+                "INSERT INTO cash_ledger (account_id, entry_type, amount_micros, "
+                "balance_after_micros, idempotency_key, note, occurred_at) "
+                "VALUES (?, 'DEPOSIT', ?, ?, ?, ?, ?)",
+                (account_id, amount_micros, balance, key, "Virtual deposit from cockpit", now),
+            )
+            connection.execute(
+                "UPDATE accounts SET state_revision = state_revision + 1, updated_at = ? WHERE id = ?",
+                (now, account_id),
+            )
+            return micros_to_money(balance)
+
     def get_positions(self, account_id: int) -> tuple[Position, ...]:
         with self.connect() as connection:
             rows = connection.execute(

@@ -10,6 +10,23 @@ from tradingagents.paper.mysql import MySQLDatabase
 from tradingagents.paper.repository import PaperRepository
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize("scenario", [
+    "test_settings_merge_isolation_and_stale_form",
+    "test_deposit_idempotence_decimal_ledger_and_contributions",
+    "test_busy_closed_and_missing_accounts",
+    "test_pending_order_blocks_both_forms",
+])
+def test_account_management_on_mysql(mysql_database, scenario):
+    from tests import test_account_management as cases
+
+    mysql_database.migrate()
+    repo = PaperRepository(mysql_database)
+    repo.create_account("first", 1000, strategy_config={"extra": "preserved", **cases.SETTINGS})
+    repo.create_account("second", 200)
+    getattr(cases, scenario)(repo)
+
+
 @pytest.fixture
 def mysql_database():
     if not os.getenv("TEST_MYSQL_HOST"):

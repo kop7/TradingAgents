@@ -6,6 +6,7 @@ RUN python -c 'import tomllib; p=tomllib.load(open("/tmp/pyproject.toml", "rb"))
     && pip install --no-cache-dir -r /tmp/admin-requirements.txt \
     && useradd --create-home admin
 COPY tradingagents/__init__.py /app/tradingagents/__init__.py
+COPY tradingagents/default_config.py /app/tradingagents/default_config.py
 COPY tradingagents/paper /app/tradingagents/paper
 COPY tradingagents/cockpit /app/tradingagents/cockpit
 ENV PYTHONPATH=/app PYTHONDONTWRITEBYTECODE=1
